@@ -7,22 +7,29 @@ function App() {
   const [token, setToken] = useState(null);
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route 
-          path="/login" 
-          element={!token ? <Login setAuth={setToken} /> : <Navigate to="/dashboard" replace />} 
-        />
-        <Route 
-          path="/dashboard" 
-          element={token ? <Dashboard token={token} setAuth={setToken} /> : <Navigate to="/login" replace />} 
-        />
-        <Route 
-          path="/" 
-          element={<Navigate to={token ? "/dashboard" : "/login"} replace />} 
-        />
-      </Routes>
-    </BrowserRouter>
+    <>
+      <div className="bg-orbs">
+        <div className="orb orb-1"></div>
+        <div className="orb orb-2"></div>
+        <div className="orb orb-3"></div>
+      </div>
+      <BrowserRouter>
+        <Routes>
+          <Route 
+            path="/login" 
+            element={!token ? <Login setAuth={setToken} /> : <Navigate to="/dashboard" replace />} 
+          />
+          <Route 
+            path="/dashboard" 
+            element={token ? <Dashboard token={token} setAuth={setToken} /> : <Navigate to="/login" replace />} 
+          />
+          <Route 
+            path="/" 
+            element={<Navigate to={token ? "/dashboard" : "/login"} replace />} 
+          />
+        </Routes>
+      </BrowserRouter>
+    </>
   );
 }
 

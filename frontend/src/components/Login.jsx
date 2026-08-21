@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogIn, Activity, AlertCircle } from 'lucide-react';
 
@@ -8,6 +8,27 @@ export default function Login({ setAuth }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+  const boxRef = useRef(null);
+
+  const handleMouseMove = (e) => {
+    if (!boxRef.current) return;
+    const rect = boxRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+    
+    const rotateX = ((y - centerY) / centerY) * -10;
+    const rotateY = ((x - centerX) / centerX) * 10;
+    
+    boxRef.current.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(10px)`;
+  };
+
+  const handleMouseLeave = () => {
+    if (!boxRef.current) return;
+    boxRef.current.style.transform = `perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(0px)`;
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -19,8 +40,10 @@ export default function Login({ setAuth }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
       });
-      if (!res.ok) {
+      if (res.status === 401) {
         throw new Error('Invalid email or password');
+      } else if (!res.ok) {
+        throw new Error(`Server error: Backend might be down (${res.status})`);
       }
       const data = await res.json();
       setAuth(data.accessToken);
@@ -40,64 +63,58 @@ export default function Login({ setAuth }) {
       justifyContent: 'center',
       padding: '20px'
     }}>
-      <div className="glass-panel animate-fade-in" style={{
-        maxWidth: '480px',
-        width: '100%',
-        padding: '48px',
-        position: 'relative'
-      }}>
-        
-        {/* Floating Accent Sphere */}
-        <div style={{
-          position: 'absolute',
-          top: '-30px',
-          right: '-30px',
-          width: '80px',
-          height: '80px',
-          background: 'radial-gradient(circle at 30% 30%, #2ECAA3, #159C7B)',
-          borderRadius: '50%',
-          boxShadow: '0 10px 20px rgba(46, 202, 163, 0.3)',
-          zIndex: -1,
-          animation: 'float 6s ease-in-out infinite'
-        }}></div>
-
-        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+      <div 
+        ref={boxRef}
+        className="bento-box animate-fade-in" 
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        style={{
+          maxWidth: '480px',
+          width: '100%',
+          padding: '48px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '32px'
+        }}
+      >
+        <div style={{ textAlign: 'center' }}>
           <div style={{
             width: '64px',
             height: '64px',
-            background: 'var(--bg-secondary)',
-            borderRadius: '16px',
+            background: 'var(--neon-orange)',
+            borderRadius: '20px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             margin: '0 auto 24px auto',
-            boxShadow: '0 4px 15px rgba(0,0,0,0.05)',
-            color: 'var(--accent-mint)'
+            boxShadow: '0 8px 25px rgba(255, 81, 47, 0.4)',
+            color: 'white',
+            transform: 'translateZ(20px)'
           }}>
             <Activity size={32} />
           </div>
-          <h1 style={{ fontSize: '32px', color: 'var(--text-primary)', marginBottom: '8px' }}>
-            Welcome to STRIDE
+          <h1 style={{ fontSize: '36px', color: 'var(--text-primary)', marginBottom: '8px', transform: 'translateZ(15px)' }}>
+            STRIDE
           </h1>
-          <p style={{ color: 'var(--text-secondary)' }}>
+          <p style={{ color: 'var(--text-secondary)', fontWeight: 500, transform: 'translateZ(10px)' }}>
             Enterprise Intelligent Order Routing
           </p>
         </div>
 
-        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          
+        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '24px', transform: 'translateZ(15px)' }}>
           {error && (
             <div style={{
-              background: '#FFF0F0',
-              color: 'var(--accent-rose)',
-              padding: '12px 16px',
-              borderRadius: '12px',
+              background: 'rgba(221, 36, 118, 0.1)',
+              color: 'var(--hot-pink)',
+              padding: '16px',
+              borderRadius: '16px',
               fontSize: '14px',
+              fontWeight: 600,
               display: 'flex',
               alignItems: 'center',
               gap: '8px'
             }}>
-              <AlertCircle size={16} />
+              <AlertCircle size={18} />
               {error}
             </div>
           )}
@@ -106,15 +123,15 @@ export default function Login({ setAuth }) {
             <label style={{
               display: 'block',
               fontSize: '13px',
-              fontWeight: 600,
+              fontWeight: 700,
               color: 'var(--text-secondary)',
-              marginBottom: '8px',
+              marginBottom: '10px',
               textTransform: 'uppercase',
               letterSpacing: '0.05em'
             }}>Email Address</label>
             <input 
               type="email" 
-              className="input-field" 
+              className="bento-input" 
               value={email}
               onChange={e => setEmail(e.target.value)}
               required
@@ -125,22 +142,22 @@ export default function Login({ setAuth }) {
             <label style={{
               display: 'block',
               fontSize: '13px',
-              fontWeight: 600,
+              fontWeight: 700,
               color: 'var(--text-secondary)',
-              marginBottom: '8px',
+              marginBottom: '10px',
               textTransform: 'uppercase',
               letterSpacing: '0.05em'
             }}>Password</label>
             <input 
               type="password" 
-              className="input-field"
+              className="bento-input"
               value={password}
               onChange={e => setPassword(e.target.value)}
               required
             />
           </div>
 
-          <button type="submit" className="btn-primary" style={{ marginTop: '8px' }} disabled={loading}>
+          <button type="submit" className="bento-btn" style={{ marginTop: '16px' }} disabled={loading}>
             {loading ? 'Authenticating...' : (
               <>
                 <LogIn size={20} />
@@ -150,7 +167,7 @@ export default function Login({ setAuth }) {
           </button>
         </form>
 
-        <div style={{ textAlign: 'center', marginTop: '32px', fontSize: '13px', color: 'var(--text-tertiary)' }}>
+        <div style={{ textAlign: 'center', fontSize: '13px', color: 'var(--text-tertiary)', fontWeight: 500, transform: 'translateZ(5px)' }}>
           System initialized with default demo credentials.
         </div>
       </div>

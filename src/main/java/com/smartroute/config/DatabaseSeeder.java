@@ -47,13 +47,11 @@ public class DatabaseSeeder implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
+        seedUsers(); // Always ensure admin user exists
+
         if (warehouseRepository.count() == 0) {
             log.info("Database is empty. Seeding dummy data for demonstration...");
             seedData();
-            log.info("Database seeding completed.");
-        } else if (userRepository.count() == 0) {
-            log.info("Users missing. Seeding admin user...");
-            seedUsers();
             log.info("Database seeding completed.");
         } else {
             log.info("Database already contains data. Seeding skipped.");
@@ -61,11 +59,14 @@ public class DatabaseSeeder implements CommandLineRunner {
     }
 
     private void seedUsers() {
-        User admin = new User();
-        admin.setEmail("admin@stride.com");
-        admin.setPasswordHash(passwordEncoder.encode("password123"));
-        admin.setRole(Role.ADMIN);
-        userRepository.save(admin);
+        if (!userRepository.existsByEmail("admin@stride.com")) {
+            log.info("Seeding admin@stride.com...");
+            User admin = new User();
+            admin.setEmail("admin@stride.com");
+            admin.setPasswordHash(passwordEncoder.encode("password123"));
+            admin.setRole(Role.ADMIN);
+            userRepository.save(admin);
+        }
     }
 
     private void seedData() {
