@@ -4,13 +4,17 @@ import com.smartroute.domain.entity.Customer;
 import com.smartroute.domain.entity.Product;
 import com.smartroute.domain.entity.StockItem;
 import com.smartroute.domain.entity.Warehouse;
+import com.smartroute.domain.entity.User;
+import com.smartroute.domain.enums.Role;
 import com.smartroute.repository.CustomerRepository;
 import com.smartroute.repository.ProductRepository;
 import com.smartroute.repository.StockItemRepository;
 import com.smartroute.repository.WarehouseRepository;
+import com.smartroute.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -24,15 +28,21 @@ public class DatabaseSeeder implements CommandLineRunner {
     private final ProductRepository productRepository;
     private final StockItemRepository stockItemRepository;
     private final CustomerRepository customerRepository;
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
     public DatabaseSeeder(WarehouseRepository warehouseRepository,
                           ProductRepository productRepository,
                           StockItemRepository stockItemRepository,
-                          CustomerRepository customerRepository) {
+                          CustomerRepository customerRepository,
+                          UserRepository userRepository,
+                          PasswordEncoder passwordEncoder) {
         this.warehouseRepository = warehouseRepository;
         this.productRepository = productRepository;
         this.stockItemRepository = stockItemRepository;
         this.customerRepository = customerRepository;
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -41,12 +51,26 @@ public class DatabaseSeeder implements CommandLineRunner {
             log.info("Database is empty. Seeding dummy data for demonstration...");
             seedData();
             log.info("Database seeding completed.");
+        } else if (userRepository.count() == 0) {
+            log.info("Users missing. Seeding admin user...");
+            seedUsers();
+            log.info("Database seeding completed.");
         } else {
             log.info("Database already contains data. Seeding skipped.");
         }
     }
 
+    private void seedUsers() {
+        User admin = new User();
+        admin.setEmail("admin@stride.com");
+        admin.setPasswordHash(passwordEncoder.encode("password123"));
+        admin.setRole(Role.ADMIN);
+        userRepository.save(admin);
+    }
+
     private void seedData() {
+        seedUsers();
+
         // 1. Warehouses
         Warehouse whCentral = new Warehouse();
         whCentral.setName("Central Hub (Chicago)");
