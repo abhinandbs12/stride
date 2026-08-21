@@ -37,9 +37,14 @@ public class AuthenticationService {
         user.setPasswordHash(passwordEncoder.encode(req.password()));
         user.setRole(req.role());
 
+        // Save the user first so that the UUID is generated and set by Hibernate
+        user = userRepository.saveAndFlush(user);
+
+        // Now generate the tokens which depend on user.getId()
         String refreshToken = jwtService.generateRefreshToken(user);
         user.setRefreshTokenHash(passwordEncoder.encode(refreshToken));
-
+        
+        // Save again to persist the refresh token hash
         userRepository.save(user);
 
         String accessToken = jwtService.generateAccessToken(user);
