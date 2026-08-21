@@ -1,0 +1,92 @@
+{
+  "name": "STRIDE: Order Allocated",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "order-allocated",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ],
+      "webhookId": "stride-order-allocated-webhook-id"
+    },
+    {
+      "parameters": {
+        "functionCode": "// This node verifies the HMAC SHA-256 signature sent by STRIDE\nconst crypto = require('crypto');\n\n// The secret must match WEBHOOK_SIGNING_SECRET in STRIDE .env\nconst secret = 'your-signing-secret-here'; \n\nconst payload = JSON.stringify(item.body);\nconst expectedSignature = 'sha256=' + crypto.createHmac('sha256', secret).update(payload).digest('hex');\n\nconst providedSignature = item.headers['x-hub-signature'];\n\nif (providedSignature !== expectedSignature) {\n  throw new Error('Invalid signature. Request rejected.');\n}\n\nreturn item;"
+      },
+      "name": "Verify Signature",
+      "type": "n8n-nodes-base.functionItem",
+      "typeVersion": 1,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "channel": "#warehouse-ops",
+        "text": "=New order allocated! Order ID: {{$node[\"Webhook\"].json[\"body\"][\"payload\"][\"orderId\"]}}\nStatus: {{$node[\"Webhook\"].json[\"body\"][\"payload\"][\"status\"]}}"
+      },
+      "name": "Slack: Notify Warehouse",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        700,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "stride@example.com",
+        "toEmail": "={{$node[\"Webhook\"].json[\"body\"][\"payload\"][\"customerEmail\"]}}",
+        "subject": "Your Order has been Confirmed!",
+        "text": "=Hello,\n\nYour order {{$node[\"Webhook\"].json[\"body\"][\"payload\"][\"orderId\"]}} has been allocated and is being prepared for shipping."
+      },
+      "name": "Email: Notify Customer",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        700,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Signature": {
+      "main": [
+        [
+          {
+            "node": "Slack: Notify Warehouse",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Email: Notify Customer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {}
+}

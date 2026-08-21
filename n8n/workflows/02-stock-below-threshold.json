@@ -1,0 +1,124 @@
+{
+  "name": "STRIDE: Stock Below Threshold",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "stock-below-threshold",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ],
+      "webhookId": "stride-stock-below-threshold-id"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Verify the HMAC SHA-256 signature sent by STRIDE\nconst crypto = require('crypto');\nconst secret = 'your-signing-secret-here'; \n\nconst payload = JSON.stringify(item.body);\nconst expectedSignature = 'sha256=' + crypto.createHmac('sha256', secret).update(payload).digest('hex');\n\nif (item.headers['x-hub-signature'] !== expectedSignature) {\n  throw new Error('Invalid signature.');\n}\n\nreturn item;"
+      },
+      "name": "Verify Signature",
+      "type": "n8n-nodes-base.functionItem",
+      "typeVersion": 1,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{$node[\"Webhook\"].json[\"body\"][\"payload\"][\"quantityRemaining\"]}}",
+              "operation": "equal",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "name": "Is Stock Zero?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        650,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "channel": "#warehouse-ops",
+        "text": "=URGENT: Stockout detected for {{$node[\"Webhook\"].json[\"body\"][\"payload\"][\"sku\"]}} at {{$node[\"Webhook\"].json[\"body\"][\"payload\"][\"warehouseName\"]}}!"
+      },
+      "name": "Slack: Urgent Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        900,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "channel": "#warehouse-ops",
+        "text": "=Warning: Stock for {{$node[\"Webhook\"].json[\"body\"][\"payload\"][\"sku\"]}} is below threshold (remaining: {{$node[\"Webhook\"].json[\"body\"][\"payload\"][\"quantityRemaining\"]}})."
+      },
+      "name": "Slack: Warning",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        900,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Signature": {
+      "main": [
+        [
+          {
+            "node": "Is Stock Zero?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Stock Zero?": {
+      "main": [
+        [
+          {
+            "node": "Slack: Urgent Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack: Warning",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {}
+}
