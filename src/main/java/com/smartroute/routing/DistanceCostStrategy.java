@@ -37,6 +37,7 @@ public final class DistanceCostStrategy implements RoutingStrategy {
                 .toList();
 
             int remaining = line.quantityRequested();
+            final int reqQty = remaining;
             double minDist = candidates.stream().mapToDouble(s -> distance(s, customerLat, customerLng)).min().orElse(0);
             double maxDist = candidates.stream().mapToDouble(s -> distance(s, customerLat, customerLng)).max().orElse(0);
             double minCost = candidates.stream().mapToDouble(StockSnapshot::costFactor).min().orElse(0);
@@ -44,7 +45,7 @@ public final class DistanceCostStrategy implements RoutingStrategy {
 
             List<StockSnapshot> ranked = candidates.stream()
                 .sorted(Comparator.comparingDouble(s ->
-                    scoreOf(s, customerLat, customerLng, remaining, minDist, maxDist, minCost, maxCost)))
+                    scoreOf(s, customerLat, customerLng, reqQty, minDist, maxDist, minCost, maxCost)))
                 .toList();
 
             for (StockSnapshot s : ranked) {

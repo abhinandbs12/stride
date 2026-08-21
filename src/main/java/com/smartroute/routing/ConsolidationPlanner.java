@@ -76,13 +76,14 @@ public final class ConsolidationPlanner {
             }
 
             int remaining = line.quantityRequested();
+            final int reqQty = remaining;
             double minDist = candidates.stream().mapToDouble(s -> DistanceCostStrategy.haversineKm(s.latitude(), s.longitude(), customerLat, customerLng)).min().orElse(0);
             double maxDist = candidates.stream().mapToDouble(s -> DistanceCostStrategy.haversineKm(s.latitude(), s.longitude(), customerLat, customerLng)).max().orElse(0);
             double minCost = candidates.stream().mapToDouble(StockSnapshot::costFactor).min().orElse(0);
             double maxCost = candidates.stream().mapToDouble(StockSnapshot::costFactor).max().orElse(0);
 
             List<StockSnapshot> ranked = candidates.stream()
-                .sorted(Comparator.comparingDouble(s -> scoreOf(s, customerLat, customerLng, remaining, minDist, maxDist, minCost, maxCost, props)))
+                .sorted(Comparator.comparingDouble(s -> scoreOf(s, customerLat, customerLng, reqQty, minDist, maxDist, minCost, maxCost, props)))
                 .toList();
 
             for (StockSnapshot s : ranked) {

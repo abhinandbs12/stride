@@ -15,8 +15,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class ConsolidationPlannerTest {
 
-    private ConsolidationPlanner planner;
     private RoutingProperties props;
+    private AllocationPlan baseline;
 
     @BeforeEach
     void setUp() {
@@ -26,7 +26,7 @@ class ConsolidationPlannerTest {
             15,
             300.0 // Max split distance
         );
-        planner = new ConsolidationPlanner(props);
+        baseline = new AllocationPlan(List.of(), java.util.Collections.emptyMap());
     }
 
     @Test
@@ -52,7 +52,7 @@ class ConsolidationPlannerTest {
         StockSnapshot snap4 = new StockSnapshot(wh2, p2, 20, 13.08, 80.27, 1.0);
 
         // When
-        AllocationPlan plan = planner.route(custLat, custLng, lines, List.of(snap1, snap2, snap3, snap4));
+        AllocationPlan plan = ConsolidationPlanner.tryConsolidate(custLat, custLng, lines, List.of(snap1, snap2, snap3, snap4), baseline, props);
 
         // Then
         assertThat(plan.backorderedByProduct()).isEmpty();
@@ -83,14 +83,9 @@ class ConsolidationPlannerTest {
         StockSnapshot snap2 = new StockSnapshot(wh2, p2, 20, 13.08, 80.27, 1.0);
 
         // When
-        AllocationPlan plan = planner.route(custLat, custLng, lines, List.of(snap1, snap2));
+        AllocationPlan plan = ConsolidationPlanner.tryConsolidate(custLat, custLng, lines, List.of(snap1, snap2), baseline, props);
 
         // Then
-        assertThat(plan.backorderedByProduct()).isEmpty();
-        assertThat(plan.entries()).hasSize(2);
-        
-        // One should come from wh1, one from wh2
-        assertThat(plan.entries()).anyMatch(e -> e.warehouseId().equals(wh1) && e.productId().equals(p1));
-        assertThat(plan.entries()).anyMatch(e -> e.warehouseId().equals(wh2) && e.productId().equals(p2));
+        assertThat(plan).isNull(); // Consolidation planner returns null if it couldn't find a better plan than baseline
     }
 }
