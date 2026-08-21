@@ -1,0 +1,70 @@
+spring:
+  application:
+    name: smartroute
+
+  jpa:
+    hibernate:
+      ddl-auto: validate  # NEVER 'update' — Flyway owns schema (Arch Ref §13 guardrail)
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/smartroute
+    username: smartroute
+    password: ${DB_PASSWORD:changeme}
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 3000  # fail fast
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    default-property-inclusion: non_null
+
+server:
+  port: 8080
+  error:
+    include-message: never  # GlobalExceptionHandler owns error body shape
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:default-dev-secret-do-not-use-in-prod-must-be-at-least-64-chars-long-for-hs512}
+  access-token-expiry-minutes: 15
+  refresh-token-expiry-days: 7
+
+# Routing Algorithm Configuration (externalized for tuning — Arch Ref §8.3)
+routing:
+  weights:
+    distance: 0.4
+    cost: 0.3
+    shortfall: 0.3
+  consolidation-beta: 0.05
+  max-candidates-per-line: 15
+  max-candidate-radius-km: 300
+
+# Twilio SMS Configuration
+twilio:
+  account-sid: ${TWILIO_ACCOUNT_SID:}
+  auth-token: ${TWILIO_AUTH_TOKEN:}
+  from-number: ${TWILIO_FROM_NUMBER:}
+
+# Webhook / n8n Configuration
+webhook:
+  signing-secret: ${WEBHOOK_SIGNING_SECRET:default-webhook-secret}
+  n8n-base-url: ${N8N_WEBHOOK_BASE_URL:}
+
+# springdoc (OpenAPI)
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html

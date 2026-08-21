@@ -1,0 +1,9 @@
+spring:
+  jpa:
+    properties:
+      hibernate:
+        show_sql: true
+
+logging:
+  level:
+    com.smartroute: DEBUG
