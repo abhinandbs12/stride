@@ -110,5 +110,30 @@ class DistanceCostStrategyTest {
         assertThat(plan.entries().get(0).quantity()).isEqualTo(10);
         
         assertThat(plan.backorderedByProduct()).containsEntry(productId, 40);
+    @Test
+    void handlesEquidistantWarehousesWithoutDivisionByZero() {
+        // Given
+        double custLat = 12.9716;
+        double custLng = 77.5946;
+
+        UUID productId = UUID.randomUUID();
+        LineRequest line = new LineRequest(productId, 10);
+
+        UUID wh1 = UUID.randomUUID();
+        // Distance and cost factor are identical for both candidates
+        StockSnapshot snap1 = new StockSnapshot(wh1, productId, 10, 13.0, 77.6, 1.0);
+
+        UUID wh2 = UUID.randomUUID();
+        StockSnapshot snap2 = new StockSnapshot(wh2, productId, 10, 13.0, 77.6, 1.0);
+
+        // When
+        // If normalization fails with divide by zero, this will throw an exception or result in NaN scoring.
+        AllocationPlan plan = strategy.route(custLat, custLng, List.of(line), List.of(snap1, snap2));
+
+        // Then
+        // Should successfully allocate from one of them (doesn't matter which, as long as it doesn't crash)
+        assertThat(plan.entries()).hasSize(1);
+        assertThat(plan.entries().get(0).quantity()).isEqualTo(10);
+        assertThat(plan.entries().get(0).warehouseId()).isIn(wh1, wh2);
     }
 }
