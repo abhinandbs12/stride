@@ -15,8 +15,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -36,8 +37,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 class OrderServiceConcurrencyTest {
 
     @Container
-    @ServiceConnection
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine");
+
+    @DynamicPropertySource
+    static void configureProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", postgres::getJdbcUrl);
+        registry.add("spring.datasource.username", postgres::getUsername);
+        registry.add("spring.datasource.password", postgres::getPassword);
+    }
 
     @Autowired
     private OrderService orderService;
@@ -82,7 +89,6 @@ class OrderServiceConcurrencyTest {
         stockItem.setWarehouse(warehouse);
         stockItem.setProduct(product);
         stockItem.setQuantity(10);
-        stockItem.setReservedQuantity(0);
         stockItemRepository.save(stockItem);
 
         customerA = new Customer();
@@ -115,7 +121,6 @@ class OrderServiceConcurrencyTest {
                 } catch (StockConflictException e) {
                     conflictCount.incrementAndGet();
                 } catch (Exception e) {
-                    // unexpected error
                     e.printStackTrace();
                 } finally {
                     doneLatch.countDown();
@@ -123,8 +128,8 @@ class OrderServiceConcurrencyTest {
             });
         }
 
-        readyLatch.await(); // wait for all threads to be ready
-        startLatch.countDown(); // release the hounds
+        readyLatch.await();
+        startLatch.countDown();
         doneLatch.await(10, TimeUnit.SECONDS);
 
         assertThat(successCount.get()).isEqualTo(1);
