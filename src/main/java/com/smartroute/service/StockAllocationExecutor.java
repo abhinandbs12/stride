@@ -10,6 +10,7 @@ import com.smartroute.domain.entity.Product;
 import com.smartroute.domain.entity.StockItem;
 import com.smartroute.domain.entity.Warehouse;
 import com.smartroute.domain.enums.OrderStatus;
+import com.smartroute.notification.LowStockEvent;
 import com.smartroute.repository.OrderRepository;
 import com.smartroute.repository.ProductRepository;
 import com.smartroute.repository.StockItemRepository;
@@ -19,6 +20,7 @@ import com.smartroute.routing.model.AllocationPlan;
 import com.smartroute.web.dto.request.OrderLineRequest;
 import com.smartroute.web.dto.request.OrderRequest;
 import com.smartroute.web.exception.EntityNotFoundException;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,17 +45,20 @@ public class StockAllocationExecutor {
     private final WarehouseRepository warehouseRepository;
     private final StockItemRepository stockItemRepository;
     private final ObjectMapper objectMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     public StockAllocationExecutor(OrderRepository orderRepository,
                                    ProductRepository productRepository,
                                    WarehouseRepository warehouseRepository,
                                    StockItemRepository stockItemRepository,
-                                   ObjectMapper objectMapper) {
+                                   ObjectMapper objectMapper,
+                                   ApplicationEventPublisher eventPublisher) {
         this.orderRepository = orderRepository;
         this.productRepository = productRepository;
         this.warehouseRepository = warehouseRepository;
         this.stockItemRepository = stockItemRepository;
         this.objectMapper = objectMapper;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -91,8 +96,25 @@ public class StockAllocationExecutor {
             StockItem stockItem = stockItemRepository.findByWarehouseIdAndProductId(entry.warehouseId(), entry.productId())
                 .orElseThrow(() -> new EntityNotFoundException("StockItem", entry.productId())); // should never happen if plan is valid
 
+            int beforeAvailable = stockItem.getAvailableToPromise();
+            int threshold = stockItem.getProduct().getReorderThreshold();
+
             // GUARDED MUTATION (Arch Ref §13)
             stockItem.reserve(entry.quantity());
+            
+            int afterAvailable = stockItem.getAvailableToPromise();
+
+            // Fire low stock event if threshold crossed
+            if (beforeAvailable >= threshold && afterAvailable < threshold) {
+                eventPublisher.publishEvent(new LowStockEvent(
+                        this,
+                        stockItem.getProduct().getName(),
+                        stockItem.getProduct().getSku(),
+                        stockItem.getWarehouse().getName(),
+                        afterAvailable
+                ));
+            }
+
             stockItemRepository.save(stockItem); // flush will trigger version check
 
             Warehouse w = warehouseRepository.getReferenceById(entry.warehouseId());

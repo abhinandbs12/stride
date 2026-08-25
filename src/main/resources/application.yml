@@ -51,16 +51,17 @@ routing:
   max-candidates-per-line: 15
   max-candidate-radius-km: 300
 
-# Twilio SMS Configuration
-twilio:
-  account-sid: ${TWILIO_ACCOUNT_SID:}
-  auth-token: ${TWILIO_AUTH_TOKEN:}
-  from-number: ${TWILIO_FROM_NUMBER:}
-
 # Webhook / n8n Configuration
 webhook:
   signing-secret: ${WEBHOOK_SIGNING_SECRET:default-webhook-secret}
   n8n-base-url: ${N8N_WEBHOOK_BASE_URL:}
+
+# Twilio SMS Configuration
+twilio:
+  account-sid: ${TWILIO_ACCOUNT_SID:mock-sid}
+  auth-token: ${TWILIO_AUTH_TOKEN:mock-token}
+  phone-number: ${TWILIO_PHONE_NUMBER:+15555555555}
+  admin-phone: ${ADMIN_PHONE_NUMBER:+15555555555}
 
 # springdoc (OpenAPI)
 springdoc:
