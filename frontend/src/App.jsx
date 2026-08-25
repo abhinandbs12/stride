@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import Analytics from './components/Analytics';
+import WarehouseStation from './components/WarehouseStation';
+import TrackingPortal from './components/TrackingPortal';
 
 function App() {
   const [token, setToken] = useState(null);
@@ -27,6 +29,18 @@ function App() {
           <Route 
             path="/analytics" 
             element={token ? <Analytics token={token} setAuth={setToken} /> : <Navigate to="/login" replace />} 
+          />
+          <Route 
+            path="/station" 
+            element={token ? <WarehouseStation token={token} setAuth={setToken} /> : <Navigate to="/login" replace />} 
+          />
+          <Route 
+            path="/track" 
+            element={<TrackingPortal />} 
+          />
+          <Route 
+            path="/track/:trackingRef" 
+            element={<TrackingPortal />} 
           />
           <Route 
             path="/" 

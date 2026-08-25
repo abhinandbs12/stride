@@ -20,6 +20,9 @@ STRIDE is an enterprise-grade, intelligent supply chain management platform that
 |---------|-------------|
 | 🧠 **Intelligent Routing Engine** | Multi-factor scoring algorithm (distance × cost × shortfall) with configurable weights |
 | 🗺️ **Digital Twin Map** | Real-time interactive Leaflet map with animated route visualization |
+| 🏬 **Warehouse Floor Station** | Tablet-friendly terminal with virtual barcode scanner & real-time pick/pack queue |
+| 📄 **PDF Shipping Label Engine** | Generates 4×6 thermal labels with Code-128 vector barcodes & carrier badges |
+| 🌐 **Public Tracking Portal** | Consumer-facing package tracking with live milestone timeline & journey map |
 | ⚡ **Stress Test Simulator** | Fire hundreds of concurrent orders to validate optimistic locking correctness |
 | 📊 **Analytics Dashboard** | Recharts-powered KPI visualizations: order volume trends, stock heatmaps, routing success rates |
 | 📱 **Twilio SMS Alerts** | Predictive low-stock alerts based on daily sales velocity (not static thresholds) |
@@ -150,6 +153,9 @@ Password: admin123
 | `POST` | `/api/v1/orders/{id}/cancel` | Cancel an order (releases stock) |
 | `POST` | `/api/v1/orders/{id}/allocations/{aid}/pick` | Mark allocation as picked |
 | `POST` | `/api/v1/orders/{id}/allocations/{aid}/ship` | Ship allocation (deducts stock) |
+| `GET` | `/api/v1/orders/{id}/label` | Download 4×6 thermal shipping label PDF |
+| `GET` | `/api/v1/orders/{id}/allocations/{aid}/label` | Download allocation shipping label PDF |
+| `GET` | `/api/v1/public/track/{trackingRef}` | Public tracking milestone & route data (No Auth) |
 | `GET` | `/api/v1/stock` | List stock items |
 | `POST` | `/api/v1/stock` | Create or update stock |
 | `POST` | `/api/v1/stock/import` | Bulk CSV import |
@@ -176,6 +182,8 @@ STRIDE/
 │   └── src/components/
 │       ├── Dashboard.jsx    # Digital Twin Map + Stress Tester
 │       ├── Analytics.jsx    # Recharts KPI Dashboard
+│       ├── WarehouseStation.jsx # Floor Pick & Pack Terminal
+│       ├── TrackingPortal.jsx   # Public Tracking Page
 │       └── Login.jsx        # JWT Authentication UI
 ├── src/main/java/com/smartroute/
 │   ├── config/              # Security, Routing, Twilio configs

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Package, MapPin, LogOut, Navigation, CheckCircle, Clock, X, Zap, Activity } from 'lucide-react';
+import { Package, MapPin, LogOut, Navigation, CheckCircle, Clock, X, Zap, Activity, FileText, Truck } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -234,12 +234,18 @@ export default function Dashboard({ token, setAuth }) {
               <p style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>Command Center</p>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <button onClick={() => navigate('/analytics')} className="bento-btn" style={{ padding: '12px 24px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 600 }}>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <button onClick={() => navigate('/station')} className="bento-btn" style={{ padding: '10px 18px', borderRadius: '14px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '13px', background: 'linear-gradient(135deg, #10B981, #059669)' }}>
+              🏬 Floor Station
+            </button>
+            <button onClick={() => navigate('/track')} className="bento-btn" style={{ padding: '10px 18px', borderRadius: '14px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '13px', background: 'linear-gradient(135deg, #6366F1, #4F46E5)' }}>
+              📦 Tracker
+            </button>
+            <button onClick={() => navigate('/analytics')} className="bento-btn" style={{ padding: '10px 18px', borderRadius: '14px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '13px' }}>
               📊 Analytics
             </button>
-            <button onClick={handleLogout} className="bento-btn-secondary" style={{ padding: '12px 24px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 600 }}>
-              <LogOut size={18} /> Exit
+            <button onClick={handleLogout} className="bento-btn-secondary" style={{ padding: '10px 18px', borderRadius: '14px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}>
+              <LogOut size={16} /> Exit
             </button>
           </div>
         </div>
@@ -329,9 +335,33 @@ export default function Dashboard({ token, setAuth }) {
             </h3>
             <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {orders.map(order => (
-                <div key={order.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', background: 'rgba(255,255,255,0.7)', borderRadius: '8px', fontSize: '13px', fontWeight: 600 }}>
-                  <span style={{ fontFamily: 'monospace', color: 'var(--text-secondary)' }}>{order.id.split('-')[0]}</span>
-                  <span style={{ color: order.status === 'ROUTED_FULL' ? '#059669' : order.status === 'CREATED' ? '#D97706' : '#DC2626' }}>{order.status}</span>
+                <div key={order.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: 'rgba(255,255,255,0.7)', borderRadius: '12px', fontSize: '13px', fontWeight: 600 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ fontFamily: 'monospace', color: 'var(--text-secondary)' }}>{order.id.split('-')[0]}</span>
+                    <span style={{ padding: '4px 10px', borderRadius: '10px', fontSize: '11px', background: order.status === 'ROUTED_FULL' ? '#D1FAE5' : order.status === 'CREATED' ? '#FEF3C7' : '#EFF6FF', color: order.status === 'ROUTED_FULL' ? '#065F46' : order.status === 'CREATED' ? '#92400E' : '#1E40AF' }}>
+                      {order.status}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <a 
+                      href={`/api/v1/orders/${order.id}/label`} 
+                      target="_blank" 
+                      rel="noreferrer"
+                      className="bento-btn-secondary"
+                      style={{ padding: '6px 10px', borderRadius: '8px', fontSize: '11px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}
+                      title="Print 4x6 Thermal Label"
+                    >
+                      <FileText size={13} /> Label
+                    </a>
+                    <button 
+                      onClick={() => navigate(`/track/${order.id}`)}
+                      className="bento-btn-secondary"
+                      style={{ padding: '6px 10px', borderRadius: '8px', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                      title="Open Customer Tracking Portal"
+                    >
+                      <Truck size={13} /> Track
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

@@ -20,10 +20,14 @@ public class OrderController {
 
     private final OrderService orderService;
     private final OrderStateService orderStateService;
+    private final com.smartroute.service.ShippingLabelService shippingLabelService;
 
-    public OrderController(OrderService orderService, OrderStateService orderStateService) {
+    public OrderController(OrderService orderService,
+                           OrderStateService orderStateService,
+                           com.smartroute.service.ShippingLabelService shippingLabelService) {
         this.orderService = orderService;
         this.orderStateService = orderStateService;
+        this.shippingLabelService = shippingLabelService;
     }
 
     @GetMapping
@@ -80,5 +84,24 @@ public class OrderController {
     @PreAuthorize("hasRole('ADMIN') or (hasRole('WH_MANAGER') and @warehouseGuard.canAccessAllocation(#allocationId, authentication))")
     public void shipAllocation(@PathVariable UUID id, @PathVariable UUID allocationId) {
         orderStateService.shipAllocation(id, allocationId);
+    }
+
+    @GetMapping("/{id}/allocations/{allocationId}/label")
+    public org.springframework.http.ResponseEntity<byte[]> getAllocationLabel(
+            @PathVariable UUID id, @PathVariable UUID allocationId) throws Exception {
+        byte[] pdf = shippingLabelService.generateAllocationLabel(id, allocationId);
+        return org.springframework.http.ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"shipping-label-" + allocationId + ".pdf\"")
+                .contentType(org.springframework.http.MediaType.APPLICATION_PDF)
+                .body(pdf);
+    }
+
+    @GetMapping("/{id}/label")
+    public org.springframework.http.ResponseEntity<byte[]> getOrderLabel(@PathVariable UUID id) throws Exception {
+        byte[] pdf = shippingLabelService.generateOrderLabel(id);
+        return org.springframework.http.ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"shipping-label-" + id + ".pdf\"")
+                .contentType(org.springframework.http.MediaType.APPLICATION_PDF)
+                .body(pdf);
     }
 }
