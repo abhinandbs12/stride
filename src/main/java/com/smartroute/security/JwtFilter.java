@@ -46,9 +46,9 @@ public class JwtFilter extends OncePerRequestFilter {
             Optional<ApiKey> apiKeyOpt = apiKeyService.validateAndTouchKey(apiKeyHeader);
             if (apiKeyOpt.isPresent()) {
                 ApiKey key = apiKeyOpt.get();
-                var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + key.getRole()));
+                Role roleEnum = "WH_MANAGER".equalsIgnoreCase(key.getRole()) ? Role.WH_MANAGER : Role.ADMIN;
                 var auth = new UsernamePasswordAuthenticationToken(
-                        new JwtPrincipal(key.getId(), "apikey:" + key.getName(), key.getRole(), List.of()),
+                        new JwtPrincipal(key.getId(), "apikey:" + key.getName(), roleEnum),
                         null,
                         authorities
                 );
