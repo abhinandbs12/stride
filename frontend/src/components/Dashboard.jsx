@@ -67,17 +67,20 @@ export default function Dashboard({ token, setAuth }) {
 
   // Map Animation State
   const [activeRoutes, setActiveRoutes] = useState([]);
+  const [transfers, setTransfers] = useState([]);
+  const [ecoMode, setEcoMode] = useState(true);
 
   // Modal State
   const [selectedWarehouse, setSelectedWarehouse] = useState(null);
 
   const fetchData = async () => {
     try {
-      const [whRes, prRes, ordRes, stockRes] = await Promise.all([
+      const [whRes, prRes, ordRes, stockRes, trfRes] = await Promise.all([
         fetch('/api/v1/warehouses', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/v1/products', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/v1/orders?size=15&sort=createdAt,desc', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/v1/stock?size=1000', { headers: { Authorization: `Bearer ${token}` } })
+        fetch('/api/v1/stock?size=1000', { headers: { Authorization: `Bearer ${token}` } }),
+        fetch('/api/v1/stock/transfers', { headers: { Authorization: `Bearer ${token}` } })
       ]);
 
       if (whRes.status === 401) {
@@ -89,10 +92,12 @@ export default function Dashboard({ token, setAuth }) {
       const prData = await prRes.json();
       const ordData = await ordRes.json();
       const stockData = await stockRes.json();
+      const trfData = await trfRes.json();
 
       setWarehouses(whData.content || whData);
       setProducts(prData.content || prData);
       setOrders(ordData.content || ordData);
+      setTransfers(Array.isArray(trfData) ? trfData : []);
 
       const stockItems = stockData.content || stockData;
       const groupedStock = {};
@@ -235,16 +240,19 @@ export default function Dashboard({ token, setAuth }) {
             </div>
           </div>
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <button onClick={() => navigate('/station')} className="bento-btn" style={{ padding: '10px 18px', borderRadius: '14px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '13px', background: 'linear-gradient(135deg, #10B981, #059669)' }}>
+            <button onClick={() => navigate('/station')} className="bento-btn" style={{ padding: '10px 16px', borderRadius: '14px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '13px', background: 'linear-gradient(135deg, #10B981, #059669)' }}>
               🏬 Floor Station
             </button>
-            <button onClick={() => navigate('/track')} className="bento-btn" style={{ padding: '10px 18px', borderRadius: '14px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '13px', background: 'linear-gradient(135deg, #6366F1, #4F46E5)' }}>
+            <button onClick={() => navigate('/developer')} className="bento-btn" style={{ padding: '10px 16px', borderRadius: '14px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '13px', background: 'linear-gradient(135deg, #F59E0B, #D97706)' }}>
+              🔑 Developers
+            </button>
+            <button onClick={() => navigate('/track')} className="bento-btn" style={{ padding: '10px 16px', borderRadius: '14px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '13px', background: 'linear-gradient(135deg, #6366F1, #4F46E5)' }}>
               📦 Tracker
             </button>
-            <button onClick={() => navigate('/analytics')} className="bento-btn" style={{ padding: '10px 18px', borderRadius: '14px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '13px' }}>
+            <button onClick={() => navigate('/analytics')} className="bento-btn" style={{ padding: '10px 16px', borderRadius: '14px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '13px' }}>
               📊 Analytics
             </button>
-            <button onClick={handleLogout} className="bento-btn-secondary" style={{ padding: '10px 18px', borderRadius: '14px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}>
+            <button onClick={handleLogout} className="bento-btn-secondary" style={{ padding: '10px 16px', borderRadius: '14px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}>
               <LogOut size={16} /> Exit
             </button>
           </div>
@@ -276,6 +284,21 @@ export default function Dashboard({ token, setAuth }) {
 
               <button onClick={handlePlaceOrder} className="bento-btn" style={{ height: '54px', padding: '0 32px' }} disabled={placing || !selectedProduct}>
                 {placing ? 'Routing...' : '1x Route'}
+              </button>
+
+              <button 
+                type="button"
+                onClick={() => setEcoMode(!ecoMode)}
+                className="bento-btn-secondary"
+                style={{ 
+                  height: '54px', padding: '0 20px', borderRadius: '16px', fontWeight: 700, fontSize: '13px',
+                  background: ecoMode ? '#D1FAE5' : 'rgba(0,0,0,0.04)',
+                  color: ecoMode ? '#065F46' : 'var(--text-secondary)',
+                  border: ecoMode ? '1px solid #10B981' : '1px solid transparent',
+                  cursor: 'pointer'
+                }}
+              >
+                🌱 {ecoMode ? 'Eco-Routing: ACTIVE' : 'Eco-Routing: OFF'}
               </button>
             </div>
 
@@ -394,6 +417,20 @@ export default function Dashboard({ token, setAuth }) {
           {activeRoutes.map(route => (
             <Polyline key={route.id} positions={[route.start, route.end]} pathOptions={{ color: 'var(--neon-orange)', weight: 3, dashArray: '10, 10', className: 'route-animation' }} />
           ))}
+
+          {/* Inter-Hub Stock Transfers */}
+          {transfers.filter(t => t.status === 'IN_TRANSIT').map(t => {
+            const start = WAREHOUSE_COORDS[t.sourceWarehouseName];
+            const end = WAREHOUSE_COORDS[t.targetWarehouseName];
+            if (!start || !end) return null;
+            return (
+              <Polyline 
+                key={t.id} 
+                positions={[start, end]} 
+                pathOptions={{ color: '#8B5CF6', weight: 4, dashArray: '6, 8' }} 
+              />
+            );
+          })}
         </MapContainer>
 
         <div style={{ position: 'absolute', top: '24px', left: '24px', zIndex: 400, background: 'rgba(255,255,255,0.9)', padding: '12px 20px', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', backdropFilter: 'blur(10px)', fontWeight: 700, fontSize: '14px' }}>

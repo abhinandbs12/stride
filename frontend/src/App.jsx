@@ -5,6 +5,7 @@ import Dashboard from './components/Dashboard';
 import Analytics from './components/Analytics';
 import WarehouseStation from './components/WarehouseStation';
 import TrackingPortal from './components/TrackingPortal';
+import DeveloperPortal from './components/DeveloperPortal';
 
 function App() {
   const [token, setToken] = useState(null);
@@ -33,6 +34,10 @@ function App() {
           <Route 
             path="/station" 
             element={token ? <WarehouseStation token={token} setAuth={setToken} /> : <Navigate to="/login" replace />} 
+          />
+          <Route 
+            path="/developer" 
+            element={token ? <DeveloperPortal token={token} setAuth={setToken} /> : <Navigate to="/login" replace />} 
           />
           <Route 
             path="/track" 

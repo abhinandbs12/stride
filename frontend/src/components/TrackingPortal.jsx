@@ -151,7 +151,15 @@ export default function TrackingPortal() {
             <div style={{ padding: '16px', background: 'rgba(0,0,0,0.02)', borderRadius: '14px' }}>
               <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 600 }}>PACKAGE CONTENTS</div>
               <div style={{ fontSize: '16px', fontWeight: 700, marginTop: '4px' }}>{data.itemCount} Units</div>
-              <div style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>Standard Insured Freight</div>
+              <div style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>{data.transportMode || 'Standard Freight'}</div>
+            </div>
+
+            <div style={{ padding: '16px', background: '#ECFDF5', borderRadius: '14px', border: '1px solid #A7F3D0' }}>
+              <div style={{ fontSize: '12px', color: '#065F46', fontWeight: 700 }}>🌱 ESG CARBON METRIC</div>
+              <div style={{ fontSize: '16px', fontWeight: 800, marginTop: '4px', color: '#047857' }}>
+                {data.carbonKg || '0.12'} kg CO₂e
+              </div>
+              <div style={{ fontSize: '12px', color: '#059669', fontWeight: 600 }}>100% Certified Offset</div>
             </div>
           </div>
 

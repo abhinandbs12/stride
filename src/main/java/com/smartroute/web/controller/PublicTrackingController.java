@@ -20,9 +20,12 @@ import java.util.UUID;
 public class PublicTrackingController {
 
     private final OrderRepository orderRepository;
+    private final com.smartroute.service.ShippingCarrierService carrierService;
 
-    public PublicTrackingController(OrderRepository orderRepository) {
+    public PublicTrackingController(OrderRepository orderRepository,
+                                    com.smartroute.service.ShippingCarrierService carrierService) {
         this.orderRepository = orderRepository;
+        this.carrierService = carrierService;
     }
 
     @GetMapping("/{trackingRef}")
@@ -132,12 +135,18 @@ public class PublicTrackingController {
         double destLng = order.getCustomer() != null ? order.getCustomer().getLongitude() : -122.6784;
 
         int itemCount = order.getOrderLines().stream().mapToInt(l -> l.getQuantityRequested()).sum();
+        double weightKg = Math.max(1.0, itemCount * 2.0);
+        double estCarbon = Math.round(carrierService.estimateCarbon(550.0, weightKg, carrier) * 100.0) / 100.0;
+        String transportMode = carrier.contains("USPS") ? "Regional Low-Emission Ground" : carrier.contains("FedEx") ? "Priority Air Express" : "Commercial Hybrid Fleet";
 
         return new PublicTrackingResponse(
             order.getId(),
             trackingNumber,
             order.getStatus().name(),
             carrier,
+            transportMode,
+            estCarbon,
+            true, // Certified Carbon Offset
             originName,
             originAddr,
             originLat,

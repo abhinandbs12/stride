@@ -32,4 +32,9 @@ public class AnalyticsController {
     public Map<String, Object> getRoutingStats() {
         return analyticsService.getRoutingStats();
     }
+
+    @GetMapping("/esg-sustainability")
+    public Map<String, Object> getEsgSustainability() {
+        return analyticsService.getEsgSustainability();
+    }
 }

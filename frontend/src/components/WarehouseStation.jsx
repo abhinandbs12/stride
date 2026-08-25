@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
   Building2, Scan, CheckCircle, PackageCheck, Truck, 
-  FileText, ArrowLeft, RefreshCw, Barcode, AlertCircle 
+  FileText, ArrowLeft, RefreshCw, Barcode, AlertCircle, ArrowRightLeft, X 
 } from 'lucide-react';
 
 export default function WarehouseStation({ token, setAuth }) {
@@ -10,18 +10,28 @@ export default function WarehouseStation({ token, setAuth }) {
   const [warehouses, setWarehouses] = useState([]);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState('');
   const [orders, setOrders] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [transfers, setTransfers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [scanInput, setScanInput] = useState('');
   const [scanMessage, setScanMessage] = useState(null);
   const [actionLoading, setActionLoading] = useState({});
+  const [showTransferModal, setShowTransferModal] = useState(false);
+
+  // Transfer Form State
+  const [transferTargetId, setTransferTargetId] = useState('');
+  const [transferProductId, setTransferProductId] = useState('');
+  const [transferQty, setTransferQty] = useState(10);
 
   const scanInputRef = useRef(null);
 
   const fetchStationData = async () => {
     try {
-      const [whRes, ordRes] = await Promise.all([
+      const [whRes, ordRes, prodRes, trfRes] = await Promise.all([
         fetch('/api/v1/warehouses', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/v1/orders?size=50&sort=createdAt,desc', { headers: { Authorization: `Bearer ${token}` } })
+        fetch('/api/v1/orders?size=50&sort=createdAt,desc', { headers: { Authorization: `Bearer ${token}` } }),
+        fetch('/api/v1/products', { headers: { Authorization: `Bearer ${token}` } }),
+        fetch('/api/v1/stock/transfers', { headers: { Authorization: `Bearer ${token}` } })
       ]);
 
       if (whRes.status === 401) {
@@ -32,6 +42,8 @@ export default function WarehouseStation({ token, setAuth }) {
 
       const whData = await whRes.json();
       const ordData = await ordRes.json();
+      const prodData = await prodRes.json();
+      const trfData = await trfRes.json();
 
       const whList = whData.content || whData;
       setWarehouses(whList);
@@ -39,7 +51,14 @@ export default function WarehouseStation({ token, setAuth }) {
         setSelectedWarehouseId(whList[0].id);
       }
 
+      const pList = prodData.content || prodData;
+      setProducts(pList);
+      if (!transferProductId && pList.length > 0) {
+        setTransferProductId(pList[0].id);
+      }
+
       setOrders(ordData.content || ordData);
+      setTransfers(Array.isArray(trfData) ? trfData : []);
       setLoading(false);
     } catch (err) {
       console.error(err);
@@ -119,6 +138,54 @@ export default function WarehouseStation({ token, setAuth }) {
     }
   };
 
+  const handleInitiateTransfer = async (e) => {
+    e.preventDefault();
+    if (!selectedWarehouseId || !transferTargetId || !transferProductId) return;
+    try {
+      const res = await fetch('/api/v1/stock/transfers', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          sourceWarehouseId: selectedWarehouseId,
+          targetWarehouseId: transferTargetId,
+          productId: transferProductId,
+          quantity: parseInt(transferQty)
+        })
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json();
+        throw new Error(errJson.message || 'Transfer failed');
+      }
+
+      setShowTransferModal(false);
+      setScanMessage({ type: 'success', text: 'Cross-Dock Transfer dispatched into transit!' });
+      await fetchStationData();
+    } catch (err) {
+      alert('Transfer error: ' + err.message);
+    }
+  };
+
+  const handleCompleteTransfer = async (transferId) => {
+    setActionLoading(prev => ({ ...prev, [transferId]: true }));
+    try {
+      const res = await fetch(`/api/v1/stock/transfers/${transferId}/complete`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Complete transfer failed');
+      setScanMessage({ type: 'success', text: 'Transfer received & added to local inventory!' });
+      await fetchStationData();
+    } catch (err) {
+      setScanMessage({ type: 'error', text: err.message });
+    } finally {
+      setActionLoading(prev => ({ ...prev, [transferId]: false }));
+    }
+  };
+
   const handleBarcodeScan = (e) => {
     e.preventDefault();
     const barcode = scanInput.trim().toUpperCase();
@@ -150,6 +217,10 @@ export default function WarehouseStation({ token, setAuth }) {
   const readyToShipCount = activeAllocations.filter(a => a.status === 'PICKED').length;
   const shippedCount = activeAllocations.filter(a => a.status === 'SHIPPED').length;
 
+  const relevantTransfers = transfers.filter(t => 
+    t.sourceWarehouseId === selectedWarehouseId || t.targetWarehouseId === selectedWarehouseId
+  );
+
   if (loading && warehouses.length === 0) {
     return <div style={{ padding: '40px', fontSize: '24px', fontWeight: 'bold' }}>Connecting to Warehouse Station...</div>;
   }
@@ -169,8 +240,15 @@ export default function WarehouseStation({ token, setAuth }) {
           </div>
         </div>
 
-        {/* Node Switcher */}
-        <div style={{ display: 'flex', gap: '8px' }}>
+        {/* Actions & Node Switcher */}
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <button 
+            onClick={() => setShowTransferModal(true)} 
+            className="bento-btn" 
+            style={{ padding: '10px 18px', borderRadius: '14px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', background: 'linear-gradient(135deg, #8B5CF6, #6D28D9)' }}
+          >
+            <ArrowRightLeft size={16} /> Inter-Hub Transfer
+          </button>
           {warehouses.map(wh => (
             <button
               key={wh.id}
@@ -347,7 +425,108 @@ export default function WarehouseStation({ token, setAuth }) {
           )}
         </div>
 
+        {/* Inter-Warehouse Cross-Dock Transfers Queue */}
+        <div className="bento-box" style={{ padding: '32px' }}>
+          <h3 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ArrowRightLeft size={20} color="#8B5CF6" /> Inter-Hub Stock Transfers
+          </h3>
+
+          {relevantTransfers.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-tertiary)' }}>
+              No active stock transfers associated with this node.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {relevantTransfers.map(trf => (
+                <div key={trf.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', background: 'rgba(139, 92, 246, 0.05)', borderRadius: '14px', border: '1px solid rgba(139, 92, 246, 0.2)' }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '15px' }}>
+                      <span style={{ color: '#8B5CF6' }}>{trf.quantity}x</span> {trf.productName} ({trf.sku})
+                    </div>
+                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                      From: <strong>{trf.sourceWarehouseName}</strong> ➔ To: <strong>{trf.targetWarehouseName}</strong> • Ref: <span style={{ fontFamily: 'monospace' }}>{trf.trackingRef}</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    {trf.status === 'IN_TRANSIT' && trf.targetWarehouseId === selectedWarehouseId ? (
+                      <button 
+                        onClick={() => handleCompleteTransfer(trf.id)}
+                        disabled={actionLoading[trf.id]}
+                        className="bento-btn" 
+                        style={{ padding: '8px 18px', borderRadius: '10px', fontSize: '13px', background: 'linear-gradient(135deg, #10B981, #059669)' }}
+                      >
+                        {actionLoading[trf.id] ? 'Receiving...' : '✓ Receive & Ingest Stock'}
+                      </button>
+                    ) : (
+                      <span style={{ padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 800, background: trf.status === 'COMPLETED' ? '#D1FAE5' : '#EDE9FE', color: trf.status === 'COMPLETED' ? '#065F46' : '#6D28D9' }}>
+                        {trf.status}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
       </div>
+
+      {/* Transfer Stock Modal */}
+      {showTransferModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <div className="bento-box animate-fade-in" style={{ width: '100%', maxWidth: '500px', padding: '32px', background: 'white' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '22px', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ArrowRightLeft size={22} color="#8B5CF6" /> Initiate Inter-Hub Transfer
+              </h2>
+              <button onClick={() => setShowTransferModal(false)} className="bento-btn-secondary" style={{ padding: '6px', borderRadius: '8px', cursor: 'pointer' }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleInitiateTransfer} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>SOURCE HUB (CURRENT)</label>
+                <input type="text" className="bento-input" value={selectedWarehouse?.name || ''} disabled style={{ width: '100%', background: '#F3F4F6' }} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>DESTINATION HUB</label>
+                <select className="bento-input" style={{ width: '100%' }} value={transferTargetId} onChange={e => setTransferTargetId(e.target.value)} required>
+                  <option value="">Select Destination Warehouse...</option>
+                  {warehouses.filter(w => w.id !== selectedWarehouseId).map(w => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>PRODUCT</label>
+                <select className="bento-input" style={{ width: '100%' }} value={transferProductId} onChange={e => setTransferProductId(e.target.value)} required>
+                  {products.map(p => (
+                    <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>TRANSFER QUANTITY</label>
+                <input type="number" className="bento-input" min="1" max="500" value={transferQty} onChange={e => setTransferQty(e.target.value)} style={{ width: '100%' }} required />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
+                <button type="submit" className="bento-btn" style={{ flex: 1, padding: '14px', background: 'linear-gradient(135deg, #8B5CF6, #6D28D9)' }}>
+                  Dispatch Transfer
+                </button>
+                <button type="button" onClick={() => setShowTransferModal(false)} className="bento-btn-secondary" style={{ padding: '14px 20px' }}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );

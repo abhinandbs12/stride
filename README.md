@@ -23,6 +23,9 @@ STRIDE is an enterprise-grade, intelligent supply chain management platform that
 | **Warehouse Floor Station** | Tablet-friendly terminal with virtual barcode scanner and real-time pick/pack queue |
 | **PDF Shipping Label Engine** | Generates 4×6 thermal labels with Code-128 vector barcodes and carrier badges |
 | **Public Tracking Portal** | Consumer-facing package tracking with live milestone timeline and journey map |
+| **ESG Green Routing & Carbon Engine** | Calculates Scope 3 emissions (kg CO₂e) with eco-mode optimization and certified offset badges |
+| **Inter-Hub Stock Transfers** | Automated cross-dock inventory rebalancing between fulfillment nodes |
+| **B2B Developer Portal** | Programmatic API key management (X-API-Key: stride_live_...) for external ERP/Shopify sync |
 | **Stress Test Simulator** | Fire hundreds of concurrent orders to validate optimistic locking correctness |
 | **Analytics Dashboard** | Recharts-powered KPI visualizations: order volume trends, stock heatmaps, routing success rates |
 | **Twilio SMS Alerts** | Predictive low-stock alerts based on daily sales velocity (not static thresholds) |
@@ -160,6 +163,12 @@ Password: admin123
 | `GET` | `/api/v1/orders/{id}/label` | Download 4×6 thermal shipping label PDF |
 | `GET` | `/api/v1/orders/{id}/allocations/{aid}/label` | Download allocation shipping label PDF |
 | `GET` | `/api/v1/public/track/{trackingRef}` | Public tracking milestone & route data (No Auth) |
+| `GET` | `/api/v1/stock/transfers` | List active inter-hub stock transfers |
+| `POST` | `/api/v1/stock/transfers` | Initiate inter-hub stock transfer |
+| `POST` | `/api/v1/stock/transfers/{id}/complete` | Ingest transferred stock at destination hub |
+| `GET` | `/api/v1/developer/keys` | List active B2B integration API keys |
+| `POST` | `/api/v1/developer/keys` | Generate new integration API key |
+| `DELETE` | `/api/v1/developer/keys/{id}` | Revoke integration API key |
 | `GET` | `/api/v1/stock` | List stock items |
 | `POST` | `/api/v1/stock` | Create or update stock |
 | `POST` | `/api/v1/stock/import` | Bulk CSV import |
@@ -170,6 +179,7 @@ Password: admin123
 | `GET` | `/api/v1/analytics/order-volume` | Order volume trends |
 | `GET` | `/api/v1/analytics/stock-levels` | Stock levels per warehouse |
 | `GET` | `/api/v1/analytics/routing-stats` | Routing success breakdown |
+| `GET` | `/api/v1/analytics/esg-sustainability` | Scope 3 carbon emission & savings metrics |
 | `GET` | `/api/v1/audit` | Query audit trail (ADMIN) |
 | `GET` | `/actuator/health` | Application health check |
 
@@ -188,6 +198,7 @@ STRIDE/
 │       ├── Analytics.jsx    # Recharts KPI Dashboard
 │       ├── WarehouseStation.jsx # Floor Pick & Pack Terminal
 │       ├── TrackingPortal.jsx   # Public Tracking Page
+│       ├── DeveloperPortal.jsx  # B2B API Key & Webhook Manager
 │       └── Login.jsx        # JWT Authentication UI
 ├── src/main/java/com/smartroute/
 │   ├── config/              # Security, Routing, Twilio configs
