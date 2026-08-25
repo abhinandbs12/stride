@@ -35,3 +35,11 @@ logs/
 
 # Spring Boot
 spring-shell.log
+
+# Spec / Architecture PDFs (internal docs, not for repo)
+*.pdf
+
+# One-off test scripts
+test.bat
+test.ps1
+test_warehouses.bat
