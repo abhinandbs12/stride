@@ -66,8 +66,8 @@ public class StockTransferService {
             throw new ApiException("Insufficient available stock at source warehouse", HttpStatus.CONFLICT, "INSUFFICIENT_STOCK") {};
         }
 
-        // Reserve stock at source
-        sourceStock.setReservedQuantity(sourceStock.getReservedQuantity() + req.quantity());
+        // Reserve stock at source using guarded domain method
+        sourceStock.reserve(req.quantity());
         stockItemRepository.save(sourceStock);
 
         StockTransfer transfer = new StockTransfer();
@@ -110,7 +110,6 @@ public class StockTransferService {
                     created.setWarehouse(transfer.getTargetWarehouse());
                     created.setProduct(transfer.getProduct());
                     created.setQuantity(0);
-                    created.setReservedQuantity(0);
                     return created;
                 });
 

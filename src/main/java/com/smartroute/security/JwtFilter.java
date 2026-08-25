@@ -1,6 +1,7 @@
 package com.smartroute.security;
 
 import com.smartroute.domain.entity.ApiKey;
+import com.smartroute.domain.enums.Role;
 import com.smartroute.service.ApiKeyService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -47,6 +48,7 @@ public class JwtFilter extends OncePerRequestFilter {
             if (apiKeyOpt.isPresent()) {
                 ApiKey key = apiKeyOpt.get();
                 Role roleEnum = "WH_MANAGER".equalsIgnoreCase(key.getRole()) ? Role.WH_MANAGER : Role.ADMIN;
+                var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + roleEnum.name()));
                 var auth = new UsernamePasswordAuthenticationToken(
                         new JwtPrincipal(key.getId(), "apikey:" + key.getName(), roleEnum),
                         null,
