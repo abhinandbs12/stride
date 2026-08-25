@@ -68,8 +68,8 @@ public class AnalyticsService {
     public Map<String, Object> getRoutingStats() {
         List<Order> allOrders = orderRepository.findAll();
         long total = allOrders.size();
-        long routedFull = allOrders.stream().filter(o -> o.getStatus() == OrderStatus.ROUTED_FULL).count();
-        long routedPartial = allOrders.stream().filter(o -> o.getStatus() == OrderStatus.ROUTED_PARTIAL).count();
+        long routedFull = allOrders.stream().filter(o -> o.getStatus() == OrderStatus.ALLOCATED).count();
+        long routedPartial = allOrders.stream().filter(o -> o.getStatus() == OrderStatus.PARTIALLY_ALLOCATED).count();
         long created = allOrders.stream().filter(o -> o.getStatus() == OrderStatus.CREATED).count();
         long shipped = allOrders.stream().filter(o -> o.getStatus() == OrderStatus.SHIPPED).count();
         long cancelled = allOrders.stream().filter(o -> o.getStatus() == OrderStatus.CANCELLED).count();
