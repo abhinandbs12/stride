@@ -1,4 +1,4 @@
-# 🚀 STRIDE
+# STRIDE
 
 **Supply chain Tracking, Routing, Inventory and Distribution Engine**
 
@@ -14,29 +14,29 @@ STRIDE is an enterprise-grade, intelligent supply chain management platform that
 
 ---
 
-## ✨ Key Features
+## Key Features
 
 | Feature | Description |
 |---------|-------------|
-| 🧠 **Intelligent Routing Engine** | Multi-factor scoring algorithm (distance × cost × shortfall) with configurable weights |
-| 🗺️ **Digital Twin Map** | Real-time interactive Leaflet map with animated route visualization |
-| 🏬 **Warehouse Floor Station** | Tablet-friendly terminal with virtual barcode scanner & real-time pick/pack queue |
-| 📄 **PDF Shipping Label Engine** | Generates 4×6 thermal labels with Code-128 vector barcodes & carrier badges |
-| 🌐 **Public Tracking Portal** | Consumer-facing package tracking with live milestone timeline & journey map |
-| ⚡ **Stress Test Simulator** | Fire hundreds of concurrent orders to validate optimistic locking correctness |
-| 📊 **Analytics Dashboard** | Recharts-powered KPI visualizations: order volume trends, stock heatmaps, routing success rates |
-| 📱 **Twilio SMS Alerts** | Predictive low-stock alerts based on daily sales velocity (not static thresholds) |
-| 🚚 **Carrier Rate-Shopping** | Mock FedEx/UPS/USPS integration for cost-optimized shipping selection |
-| 🔐 **JWT Authentication** | Stateless auth with role-based access control (ADMIN, WH_MANAGER) |
-| 📋 **Audit Trail** | SOC2-compliant logging of every mutation with actor, timestamp, and JSONB details |
-| 📁 **CSV Bulk Import/Export** | Upload/download stock data as CSV for warehouse operations |
-| 🔄 **Optimistic Locking** | `@Version`-based concurrency control preventing overselling under load |
-| 🪝 **Webhook Integration** | Post-commit event publishing to n8n/external systems with HMAC signing |
-| ❤️ **Production Monitoring** | Spring Boot Actuator with health, metrics, and Prometheus endpoints |
+| **Intelligent Routing Engine** | Multi-factor scoring algorithm (distance × cost × shortfall) with configurable weights |
+| **Digital Twin Map** | Real-time interactive Leaflet map with animated route visualization |
+| **Warehouse Floor Station** | Tablet-friendly terminal with virtual barcode scanner and real-time pick/pack queue |
+| **PDF Shipping Label Engine** | Generates 4×6 thermal labels with Code-128 vector barcodes and carrier badges |
+| **Public Tracking Portal** | Consumer-facing package tracking with live milestone timeline and journey map |
+| **Stress Test Simulator** | Fire hundreds of concurrent orders to validate optimistic locking correctness |
+| **Analytics Dashboard** | Recharts-powered KPI visualizations: order volume trends, stock heatmaps, routing success rates |
+| **Twilio SMS Alerts** | Predictive low-stock alerts based on daily sales velocity (not static thresholds) |
+| **Carrier Rate-Shopping** | Mock FedEx/UPS/USPS integration for cost-optimized shipping selection |
+| **JWT Authentication** | Stateless auth with role-based access control (ADMIN, WH_MANAGER) |
+| **Audit Trail** | SOC2-compliant logging of every mutation with actor, timestamp, and JSONB details |
+| **CSV Bulk Import/Export** | Upload/download stock data as CSV for warehouse operations |
+| **Optimistic Locking** | `@Version`-based concurrency control preventing overselling under load |
+| **Webhook Integration** | Post-commit event publishing to n8n/external systems with HMAC signing |
+| **Production Monitoring** | Spring Boot Actuator with health, metrics, and Prometheus endpoints |
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```mermaid
 graph TB
@@ -50,6 +50,7 @@ graph TB
         Stock[Stock Controller]
         Analytics[Analytics Controller]
         Audit[Audit Controller]
+        PublicTrack[Public Tracking Controller]
     end
 
     subgraph Service Layer
@@ -57,6 +58,7 @@ graph TB
         RoutingEngine[Routing Engine<br/>DistanceCostStrategy]
         StockAlloc[Stock Allocation Executor]
         CarrierSvc[Carrier Rate Service]
+        LabelSvc[Shipping Label Service]
         AuditSvc[Audit Service]
     end
 
@@ -72,9 +74,10 @@ graph TB
         Webhook[n8n Webhooks]
     end
 
-    React --> Auth & Orders & Stock & Analytics & Audit
+    React --> Auth & Orders & Stock & Analytics & Audit & PublicTrack
     Orders --> OrderSvc --> RoutingEngine --> StockAlloc
     RoutingEngine --> CarrierSvc
+    Orders --> LabelSvc
     StockAlloc --> Entities --> PG
     OrderSvc --> AuditSvc --> PG
     StockAlloc -.-> Twilio
@@ -84,7 +87,7 @@ graph TB
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
@@ -95,6 +98,7 @@ graph TB
 | **Frontend** | React 18 | Single-page application |
 | **Maps** | Leaflet / react-leaflet | Geospatial visualization |
 | **Charts** | Recharts | Analytics visualizations |
+| **PDF & Barcode** | OpenPDF 1.3 | 4×6 shipping labels & Code-128 vector barcodes |
 | **SMS** | Twilio SDK | Low-stock alerts |
 | **API Docs** | SpringDoc OpenAPI | Swagger UI |
 | **Monitoring** | Spring Boot Actuator | Health & metrics |
@@ -103,7 +107,7 @@ graph TB
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - Java 17+
@@ -140,7 +144,7 @@ Password: admin123
 
 ---
 
-## 📡 API Reference
+## API Reference
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -173,7 +177,7 @@ Full interactive docs available at: `http://localhost:8080/swagger-ui.html`
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 ```
 STRIDE/
@@ -212,7 +216,7 @@ STRIDE/
 
 ---
 
-## 🧪 Testing
+## Testing
 
 ```bash
 # Unit tests
@@ -230,6 +234,6 @@ curl -X POST http://localhost:8080/api/v1/orders/stress-test?count=100 \
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License.
