@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Activity, Lock, Mail, ArrowRight, AlertCircle, Sparkles, ShieldCheck } from 'lucide-react';
 
 export default function Login({ setAuth }) {
-  const [email, setEmail] = useState('admin@stride.io');
-  const [password, setPassword] = useState('admin123');
+  const [email, setEmail] = useState('admin@stride.com');
+  const [password, setPassword] = useState('password123');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
@@ -35,8 +35,8 @@ export default function Login({ setAuth }) {
   };
 
   const handleAutofill = () => {
-    setEmail('admin@stride.io');
-    setPassword('admin123');
+    setEmail('admin@stride.com');
+    setPassword('password123');
   };
 
   return (

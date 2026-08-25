@@ -61,11 +61,19 @@ public class DatabaseSeeder implements CommandLineRunner {
     private void seedUsers() {
         if (!userRepository.existsByEmail("admin@stride.com")) {
             log.info("Seeding admin@stride.com...");
-            User admin = new User();
-            admin.setEmail("admin@stride.com");
-            admin.setPasswordHash(passwordEncoder.encode("password123"));
-            admin.setRole(Role.ADMIN);
-            userRepository.save(admin);
+            User admin1 = new User();
+            admin1.setEmail("admin@stride.com");
+            admin1.setPasswordHash(passwordEncoder.encode("password123"));
+            admin1.setRole(Role.ADMIN);
+            userRepository.save(admin1);
+        }
+        if (!userRepository.existsByEmail("admin@stride.io")) {
+            log.info("Seeding admin@stride.io...");
+            User admin2 = new User();
+            admin2.setEmail("admin@stride.io");
+            admin2.setPasswordHash(passwordEncoder.encode("admin123"));
+            admin2.setRole(Role.ADMIN);
+            userRepository.save(admin2);
         }
     }
 
