@@ -30,7 +30,7 @@ public class ReorderAlertJob {
 
     public ReorderAlertJob(StockItemRepository stockItemRepository,
                            UserRepository userRepository,
-                           @Value("${twilio.from-number}") String fromNumber) {
+                           @Value("${twilio.from-number:${twilio.phone-number:+15555555555}}") String fromNumber) {
         this.stockItemRepository = stockItemRepository;
         this.userRepository = userRepository;
         this.fromNumber = fromNumber;
