@@ -63,6 +63,19 @@ twilio:
   phone-number: ${TWILIO_PHONE_NUMBER:+15555555555}
   admin-phone: ${ADMIN_PHONE_NUMBER:+15555555555}
 
+# Production Monitoring (Actuator)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when_authorized
+  info:
+    env:
+      enabled: true
+
 # springdoc (OpenAPI)
 springdoc:
   api-docs:

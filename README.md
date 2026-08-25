@@ -1,71 +1,227 @@
-# STRIDE 
-**Supply chain Tracking, Routing, Inventory & Distribution Engine**
+# 🚀 STRIDE
 
-STRIDE is a high-performance backend engine designed to manage warehouse inventories, orchestrate complex order fulfillment, and route orders to optimal warehouses based on distance, cost, and stock availability. 
+**Supply chain Tracking, Routing, Inventory and Distribution Engine**
 
-It is built as the core backend for a Final Year Project (Presidency University, Department of Computer Science and Engineering) by Abhinand Baiju Smitha.
+![Java](https://img.shields.io/badge/Java-17-orange?style=flat-square&logo=openjdk)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2-green?style=flat-square&logo=springboot)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-blue?style=flat-square&logo=postgresql)
+![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react)
+![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)
 
-## 🚀 Features
+---
 
-- **Pure Function Routing Engine**: Implements a Bitmask Dynamic Programming (DP) consolidation algorithm to optimally split and fulfill orders from multiple warehouses. Minimizes distance and cost while maximizing fulfillment.
-- **Robust State Machine**: Manages the lifecycle of orders (`CREATED` → `ALLOCATED` → `CONFIRMED` → `PICKED` → `SHIPPED` → `DELIVERED`).
-- **Resilient Concurrency**: Implements strict Optimistic Locking (`@Version`) with `@Retryable` whole-use-case retries to handle high-contention warehouse stock updates without deadlocks.
-- **Role-Based Security**: JWT stateless authentication with three distinct roles (`ADMIN`, `WH_MANAGER`, `SUPPLIER`) and granular SpEL-based access control.
-- **Asynchronous Webhooks**: Fires HMAC SHA-256 signed webhooks to an external `n8n` automation server strictly `AFTER_COMMIT` to guarantee data consistency.
-- **Automated Alerts**: Runs daily CRON jobs to evaluate stock thresholds and fire Twilio SMS alerts to warehouse managers for reordering.
+STRIDE is an enterprise-grade, intelligent supply chain management platform that optimizes multi-warehouse order routing using a weighted scoring algorithm with live carrier rate-shopping, predictive restocking, and real-time geospatial visualization.
 
-## 🛠 Tech Stack
+---
 
-- **Language**: Java 17
-- **Framework**: Spring Boot 3 (Web, Data JPA, Security, Validation, Retry)
-- **Database**: PostgreSQL 15 (via Docker)
-- **Migrations**: Flyway
-- **API Documentation**: OpenAPI / Swagger (`springdoc-openapi`)
-- **Containerization**: Docker & Docker Compose
-- **Integrations**: Twilio (SMS), n8n (Webhooks & Workflow Automation)
+## ✨ Key Features
 
-## 📦 Architecture Overview
+| Feature | Description |
+|---------|-------------|
+| 🧠 **Intelligent Routing Engine** | Multi-factor scoring algorithm (distance × cost × shortfall) with configurable weights |
+| 🗺️ **Digital Twin Map** | Real-time interactive Leaflet map with animated route visualization |
+| ⚡ **Stress Test Simulator** | Fire hundreds of concurrent orders to validate optimistic locking correctness |
+| 📊 **Analytics Dashboard** | Recharts-powered KPI visualizations: order volume trends, stock heatmaps, routing success rates |
+| 📱 **Twilio SMS Alerts** | Predictive low-stock alerts based on daily sales velocity (not static thresholds) |
+| 🚚 **Carrier Rate-Shopping** | Mock FedEx/UPS/USPS integration for cost-optimized shipping selection |
+| 🔐 **JWT Authentication** | Stateless auth with role-based access control (ADMIN, WH_MANAGER) |
+| 📋 **Audit Trail** | SOC2-compliant logging of every mutation with actor, timestamp, and JSONB details |
+| 📁 **CSV Bulk Import/Export** | Upload/download stock data as CSV for warehouse operations |
+| 🔄 **Optimistic Locking** | `@Version`-based concurrency control preventing overselling under load |
+| 🪝 **Webhook Integration** | Post-commit event publishing to n8n/external systems with HMAC signing |
+| ❤️ **Production Monitoring** | Spring Boot Actuator with health, metrics, and Prometheus endpoints |
 
-STRIDE enforces strict architectural boundaries:
-- **`com.smartroute.routing`**: A pure Java package containing the routing logic. **Zero** Spring or JPA dependencies exist here, allowing for blisteringly fast unit tests.
-- **`com.smartroute.domain.state`**: State pattern implementation mapping to the `OrderStatus` enum.
-- **`com.smartroute.service`**: Transaction boundaries. `OrderService` handles retries, while `StockAllocationExecutor` handles the specific persistence of order allocations with strict lock-ordering.
+---
 
-## ⚙️ How to Run Locally
+## 🏗️ Architecture
+
+```mermaid
+graph TB
+    subgraph Frontend
+        React[React 18 + Leaflet + Recharts]
+    end
+
+    subgraph API Layer
+        Auth[Auth Controller]
+        Orders[Order Controller]
+        Stock[Stock Controller]
+        Analytics[Analytics Controller]
+        Audit[Audit Controller]
+    end
+
+    subgraph Service Layer
+        OrderSvc[Order Service<br/>@Retryable]
+        RoutingEngine[Routing Engine<br/>DistanceCostStrategy]
+        StockAlloc[Stock Allocation Executor]
+        CarrierSvc[Carrier Rate Service]
+        AuditSvc[Audit Service]
+    end
+
+    subgraph Domain
+        Entities[JPA Entities<br/>@Version Locking]
+        StateMachine[Order State Machine]
+    end
+
+    subgraph Infrastructure
+        PG[(PostgreSQL 15)]
+        Flyway[Flyway Migrations]
+        Twilio[Twilio SMS]
+        Webhook[n8n Webhooks]
+    end
+
+    React --> Auth & Orders & Stock & Analytics & Audit
+    Orders --> OrderSvc --> RoutingEngine --> StockAlloc
+    RoutingEngine --> CarrierSvc
+    StockAlloc --> Entities --> PG
+    OrderSvc --> AuditSvc --> PG
+    StockAlloc -.-> Twilio
+    OrderSvc -.-> Webhook
+    Flyway --> PG
+```
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| **Backend** | Java 17 + Spring Boot 3.2 | REST API, business logic |
+| **Database** | PostgreSQL 15 | Persistent storage |
+| **Migrations** | Flyway | Schema versioning |
+| **Auth** | JJWT 0.12 | Stateless JWT tokens |
+| **Frontend** | React 18 | Single-page application |
+| **Maps** | Leaflet / react-leaflet | Geospatial visualization |
+| **Charts** | Recharts | Analytics visualizations |
+| **SMS** | Twilio SDK | Low-stock alerts |
+| **API Docs** | SpringDoc OpenAPI | Swagger UI |
+| **Monitoring** | Spring Boot Actuator | Health & metrics |
+| **CI/CD** | GitHub Actions | Automated testing |
+| **Containers** | Docker + Compose | One-command deployment |
+
+---
+
+## 🚀 Quick Start
 
 ### Prerequisites
+- Java 17+
 - Docker & Docker Compose
-- Java 17 (if running outside of Docker)
+- Node.js 18+ (for frontend development)
 
-### Setup
+### Option 1: Docker (Recommended)
+```bash
+git clone https://github.com/abhinandbs12/stride.git
+cd stride
+docker-compose up -d
+```
+The app will be available at `http://localhost:8080`.
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/abhinandbs12/stride.git
-   cd stride
-   ```
+### Option 2: Manual Setup
+```bash
+# 1. Start PostgreSQL
+docker-compose up -d postgres
 
-2. **Configure Environment Variables**
-   Copy the example environment file and fill in your secrets (like Twilio credentials and JWT secret):
-   ```bash
-   cp .env.example .env
-   ```
+# 2. Build & run backend
+./mvnw spring-boot:run
 
-3. **Run with Docker Compose**
-   The provided `docker-compose.yml` will spin up PostgreSQL, run Flyway migrations, and start the Spring Boot application.
-   ```bash
-   docker-compose up --build
-   ```
+# 3. Start frontend (in a new terminal)
+cd frontend
+npm install
+npm start
+```
 
-4. **Access the API Documentation**
-   Once running, you can interact with the API via the Swagger UI:
-   - `http://localhost:8080/swagger-ui.html`
+### Default Login
+```
+Email:    admin@stride.io
+Password: admin123
+```
 
-## 🧩 Database Schema
-The database schema is strictly managed by Flyway. Key tables include:
-- `users`: Stores user credentials and roles.
-- `warehouse` & `product`: Core master data.
-- `stock_item`: The critical table tracking inventory with `version` for optimistic locking.
-- `orders`, `order_line`, `order_allocation`: Tracks the customer request and the algorithmic routing decisions.
+---
 
-*Note: JPA `ddl-auto` is set to `validate` to ensure Hibernate never modifies the schema.*
+## 📡 API Reference
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/v1/auth/login` | Authenticate and receive JWT |
+| `POST` | `/api/v1/auth/refresh` | Refresh access token |
+| `GET` | `/api/v1/orders` | List orders (paginated, filterable) |
+| `POST` | `/api/v1/orders` | Place & route a new order |
+| `POST` | `/api/v1/orders/stress-test?count=50` | Launch concurrent stress test |
+| `POST` | `/api/v1/orders/{id}/confirm` | Confirm an order |
+| `POST` | `/api/v1/orders/{id}/cancel` | Cancel an order (releases stock) |
+| `POST` | `/api/v1/orders/{id}/allocations/{aid}/pick` | Mark allocation as picked |
+| `POST` | `/api/v1/orders/{id}/allocations/{aid}/ship` | Ship allocation (deducts stock) |
+| `GET` | `/api/v1/stock` | List stock items |
+| `POST` | `/api/v1/stock` | Create or update stock |
+| `POST` | `/api/v1/stock/import` | Bulk CSV import |
+| `GET` | `/api/v1/stock/export` | CSV export |
+| `GET` | `/api/v1/warehouses` | List warehouses |
+| `GET` | `/api/v1/products` | List products |
+| `GET` | `/api/v1/customers` | List customers |
+| `GET` | `/api/v1/analytics/order-volume` | Order volume trends |
+| `GET` | `/api/v1/analytics/stock-levels` | Stock levels per warehouse |
+| `GET` | `/api/v1/analytics/routing-stats` | Routing success breakdown |
+| `GET` | `/api/v1/audit` | Query audit trail (ADMIN) |
+| `GET` | `/actuator/health` | Application health check |
+
+Full interactive docs available at: `http://localhost:8080/swagger-ui.html`
+
+---
+
+## 📂 Project Structure
+
+```
+STRIDE/
+├── .github/workflows/       # CI/CD pipeline
+├── frontend/                # React SPA
+│   └── src/components/
+│       ├── Dashboard.jsx    # Digital Twin Map + Stress Tester
+│       ├── Analytics.jsx    # Recharts KPI Dashboard
+│       └── Login.jsx        # JWT Authentication UI
+├── src/main/java/com/smartroute/
+│   ├── config/              # Security, Routing, Twilio configs
+│   ├── domain/
+│   │   ├── entity/          # JPA entities (Order, StockItem, etc.)
+│   │   ├── enums/           # OrderStatus, Role, etc.
+│   │   └── state/           # Order state machine
+│   ├── job/                 # Scheduled jobs (PredictiveRestockJob)
+│   ├── notification/        # Twilio SMS + Webhook + Event system
+│   ├── repository/          # Spring Data JPA repositories
+│   ├── routing/             # Core routing algorithm
+│   │   └── DistanceCostStrategy.java
+│   ├── security/            # JWT filter, service, guards
+│   ├── service/             # Business logic layer
+│   └── web/
+│       ├── controller/      # REST controllers
+│       ├── dto/             # Request/Response DTOs
+│       └── exception/       # Global error handling
+├── src/main/resources/
+│   ├── db/migration/        # Flyway SQL migrations (V1-V4)
+│   └── application.yml      # Externalized configuration
+├── Dockerfile               # Multi-stage production build
+├── docker-compose.yml       # Full stack orchestration
+└── pom.xml                  # Maven dependencies
+```
+
+---
+
+## 🧪 Testing
+
+```bash
+# Unit tests
+./mvnw test
+
+# Integration tests (requires Docker for Testcontainers)
+./mvnw verify
+
+# Concurrency stress test (via API)
+curl -X POST http://localhost:8080/api/v1/orders/stress-test?count=100 \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"customerId":"...","lines":[{"productId":"...","quantity":1}]}'
+```
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License.

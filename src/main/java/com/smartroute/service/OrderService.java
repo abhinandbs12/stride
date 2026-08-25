@@ -43,6 +43,7 @@ public class OrderService {
     private final OrderStateService orderStateService;
     private final WebhookEventPublisher webhookPublisher;
     private final OrderRepository orderRepository;
+    private final AuditService auditService;
 
     public OrderService(CustomerRepository customerRepository,
                         StockItemRepository stockItemRepository,
@@ -50,7 +51,8 @@ public class OrderService {
                         StockAllocationExecutor allocationExecutor,
                         OrderStateService orderStateService,
                         WebhookEventPublisher webhookPublisher,
-                        OrderRepository orderRepository) {
+                        OrderRepository orderRepository,
+                        AuditService auditService) {
         this.customerRepository = customerRepository;
         this.stockItemRepository = stockItemRepository;
         this.routingStrategy = routingStrategy;
@@ -58,6 +60,7 @@ public class OrderService {
         this.orderStateService = orderStateService;
         this.webhookPublisher = webhookPublisher;
         this.orderRepository = orderRepository;
+        this.auditService = auditService;
     }
 
     @Retryable(
@@ -97,6 +100,10 @@ public class OrderService {
         if (hasBackorder) {
             webhookPublisher.publishStockBackordered(order);
         }
+
+        // 8. Audit trail
+        auditService.log("ORDER_PLACED", "Order", order.getId(),
+            java.util.Map.of("status", order.getStatus().name(), "customerId", customer.getId().toString()));
 
         return OrderMapper.toResponse(order);
     }

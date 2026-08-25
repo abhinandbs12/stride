@@ -234,9 +234,14 @@ export default function Dashboard({ token, setAuth }) {
               <p style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>Command Center</p>
             </div>
           </div>
-          <button onClick={handleLogout} className="bento-btn-secondary" style={{ padding: '12px 24px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 600 }}>
-            <LogOut size={18} /> Exit
-          </button>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button onClick={() => navigate('/analytics')} className="bento-btn" style={{ padding: '12px 24px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 600 }}>
+              📊 Analytics
+            </button>
+            <button onClick={handleLogout} className="bento-btn-secondary" style={{ padding: '12px 24px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 600 }}>
+              <LogOut size={18} /> Exit
+            </button>
+          </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>

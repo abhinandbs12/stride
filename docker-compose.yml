@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: smartroute
       POSTGRES_USER: smartroute
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secretpassword}
     ports:
       - "5432:5432"
     volumes:
@@ -24,15 +24,19 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/smartroute
       SPRING_DATASOURCE_USERNAME: smartroute
-      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
-      JWT_SECRET: ${JWT_SECRET}
-      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
-      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
-      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER}
-      WEBHOOK_SIGNING_SECRET: ${WEBHOOK_SIGNING_SECRET}
-      N8N_WEBHOOK_BASE_URL: http://n8n:5678/webhook
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-secretpassword}
+      JWT_SECRET: ${JWT_SECRET:-default-dev-secret-do-not-use-in-prod-must-be-at-least-64-chars-long-for-hs512}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-mock-sid}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-mock-token}
+      TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER:-+15555555555}
+      ADMIN_PHONE_NUMBER: ${ADMIN_PHONE_NUMBER:-+15555555555}
     ports:
       - "8080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   n8n:
     image: n8nio/n8n:latest
@@ -40,8 +44,8 @@ services:
       - "5678:5678"
     environment:
       N8N_BASIC_AUTH_ACTIVE: "true"
-      N8N_BASIC_AUTH_USER: ${N8N_USER}
-      N8N_BASIC_AUTH_PASSWORD: ${N8N_PASSWORD}
+      N8N_BASIC_AUTH_USER: ${N8N_USER:-admin}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_PASSWORD:-password}
       WEBHOOK_URL: "http://localhost:5678/"
     volumes:
       - n8n_data:/home/node/.n8n
