@@ -26,7 +26,7 @@ class DistanceCostStrategyTest {
             15,
             300.0
         );
-        strategy = new DistanceCostStrategy(props);
+        strategy = new DistanceCostStrategy(props, new com.smartroute.service.ShippingCarrierService());
     }
 
     @Test
@@ -110,6 +110,8 @@ class DistanceCostStrategyTest {
         assertThat(plan.entries().get(0).quantity()).isEqualTo(10);
         
         assertThat(plan.backorderedByProduct()).containsEntry(productId, 40);
+    }
+
     @Test
     void handlesEquidistantWarehousesWithoutDivisionByZero() {
         // Given
