@@ -1,0 +1,1 @@
+ALTER TABLE product ADD COLUMN daily_sales_velocity DOUBLE PRECISION NOT NULL DEFAULT 1.0;

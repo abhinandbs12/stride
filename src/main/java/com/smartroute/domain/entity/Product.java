@@ -30,6 +30,9 @@ public class Product {
     @Column(name = "reorder_threshold", nullable = false)
     private int reorderThreshold = 10;
 
+    @Column(name = "daily_sales_velocity", nullable = false)
+    private double dailySalesVelocity = 1.0;
+
     // --- Getters and Setters ---
 
     public UUID getId() { return id; }
@@ -49,4 +52,7 @@ public class Product {
 
     public int getReorderThreshold() { return reorderThreshold; }
     public void setReorderThreshold(int reorderThreshold) { this.reorderThreshold = reorderThreshold; }
+
+    public double getDailySalesVelocity() { return dailySalesVelocity; }
+    public void setDailySalesVelocity(double dailySalesVelocity) { this.dailySalesVelocity = dailySalesVelocity; }
 }

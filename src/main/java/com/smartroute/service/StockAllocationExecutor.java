@@ -97,15 +97,17 @@ public class StockAllocationExecutor {
                 .orElseThrow(() -> new EntityNotFoundException("StockItem", entry.productId())); // should never happen if plan is valid
 
             int beforeAvailable = stockItem.getAvailableToPromise();
-            int threshold = stockItem.getProduct().getReorderThreshold();
+            double velocity = stockItem.getProduct().getDailySalesVelocity();
+            double beforeDays = beforeAvailable / Math.max(0.1, velocity);
 
             // GUARDED MUTATION (Arch Ref §13)
             stockItem.reserve(entry.quantity());
             
             int afterAvailable = stockItem.getAvailableToPromise();
+            double afterDays = afterAvailable / Math.max(0.1, velocity);
 
-            // Fire low stock event if threshold crossed
-            if (beforeAvailable >= threshold && afterAvailable < threshold) {
+            // Fire predictive low stock event if days of inventory drops below 3 days
+            if (beforeDays >= 3.0 && afterDays < 3.0) {
                 eventPublisher.publishEvent(new LowStockEvent(
                         this,
                         stockItem.getProduct().getName(),

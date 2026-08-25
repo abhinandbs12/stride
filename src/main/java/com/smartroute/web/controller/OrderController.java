@@ -45,6 +45,13 @@ public class OrderController {
         return orderService.placeOrder(req);
     }
 
+    @PostMapping("/stress-test")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public void stressTest(@RequestParam(defaultValue = "100") int count,
+                           @Valid @RequestBody OrderRequest req) {
+        orderService.stressTest(count, req);
+    }
+
     @PostMapping("/{id}/confirm")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasRole('ADMIN')")

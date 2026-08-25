@@ -1,6 +1,14 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Package, MapPin, LogOut, Navigation, CheckCircle, Clock, X } from 'lucide-react';
+import { Package, MapPin, LogOut, Navigation, CheckCircle, Clock, X, Zap, Activity } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+
+const WAREHOUSE_COORDS = {
+  'Central Hub': [41.8781, -87.6298],
+  'East Coast Distribution': [40.7357, -74.1724],
+  'West Coast Fulfillment': [34.0522, -118.2437]
+};
 
 const TiltBox = ({ children, className, style, onClick }) => {
   const boxRef = useRef(null);
@@ -52,6 +60,13 @@ export default function Dashboard({ token, setAuth }) {
   const [quantity, setQuantity] = useState(1);
   const [orderResult, setOrderResult] = useState(null);
   const [placing, setPlacing] = useState(false);
+  
+  // Stress Test State
+  const [stressTesting, setStressTesting] = useState(false);
+  const [stressCount, setStressCount] = useState(10);
+
+  // Map Animation State
+  const [activeRoutes, setActiveRoutes] = useState([]);
 
   // Modal State
   const [selectedWarehouse, setSelectedWarehouse] = useState(null);
@@ -61,7 +76,7 @@ export default function Dashboard({ token, setAuth }) {
       const [whRes, prRes, ordRes, stockRes] = await Promise.all([
         fetch('/api/v1/warehouses', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/v1/products', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/v1/orders?size=5&sort=createdAt,desc', { headers: { Authorization: `Bearer ${token}` } }),
+        fetch('/api/v1/orders?size=15&sort=createdAt,desc', { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/v1/stock?size=1000', { headers: { Authorization: `Bearer ${token}` } })
       ]);
 
@@ -79,7 +94,6 @@ export default function Dashboard({ token, setAuth }) {
       setProducts(prData.content || prData);
       setOrders(ordData.content || ordData);
 
-      // Group stock by warehouse
       const stockItems = stockData.content || stockData;
       const groupedStock = {};
       stockItems.forEach(item => {
@@ -102,42 +116,55 @@ export default function Dashboard({ token, setAuth }) {
       return;
     }
     fetchData();
+    // Auto refresh data every 3 seconds for stress test monitoring
+    const interval = setInterval(fetchData, 3000);
+    return () => clearInterval(interval);
   }, [token, navigate, setAuth]);
 
   const handleLogout = () => {
     setAuth(null);
     navigate('/login');
   };
+  
+  const triggerMapAnimation = (orderData) => {
+    // Basic mapping animation from warehouse to random customer location near center US
+    if(!orderData.lines || !orderData.lines[0] || !orderData.lines[0].allocations) return;
+    
+    const customerLat = 38.0 + (Math.random() * 4 - 2);
+    const customerLng = -95.0 + (Math.random() * 10 - 5);
+    const cLoc = [customerLat, customerLng];
+
+    const newRoutes = orderData.lines[0].allocations.map(a => {
+      const wh = warehouses.find(w => w.id === a.warehouseId);
+      const start = WAREHOUSE_COORDS[wh?.name] || [40, -100];
+      return { id: Math.random(), start, end: cLoc };
+    });
+
+    setActiveRoutes(prev => [...prev, ...newRoutes]);
+    setTimeout(() => {
+      setActiveRoutes(prev => prev.filter(r => !newRoutes.find(nr => nr.id === r.id)));
+    }, 3000);
+  };
 
   const handlePlaceOrder = async (e) => {
-    e.preventDefault();
+    if(e) e.preventDefault();
     setPlacing(true);
     setOrderResult(null);
 
     const orderReq = {
       customerId: "00000000-0000-0000-0000-000000000000",
-      lines: [
-        {
-          productId: selectedProduct,
-          quantity: parseInt(quantity)
-        }
-      ]
+      lines: [{ productId: selectedProduct, quantity: parseInt(quantity) }]
     };
 
     try {
       const cRes = await fetch('/api/v1/customers', { headers: { Authorization: `Bearer ${token}` } });
       const cData = await cRes.json();
       const customer = cData.content[0]; 
-
-      if(!customer) throw new Error("No customers found");
       orderReq.customerId = customer.id;
 
       const res = await fetch('/api/v1/orders', {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(orderReq)
       });
       
@@ -145,7 +172,7 @@ export default function Dashboard({ token, setAuth }) {
       if (!res.ok) throw new Error(data.message || 'Routing failed');
       
       setOrderResult(data);
-      // Automatically refresh data after routing
+      triggerMapAnimation(data);
       await fetchData();
     } catch (err) {
       setOrderResult({ error: err.message });
@@ -154,205 +181,221 @@ export default function Dashboard({ token, setAuth }) {
     }
   };
 
+  const handleStressTest = async (e) => {
+    e.preventDefault();
+    setStressTesting(true);
+    const orderReq = {
+      customerId: "00000000-0000-0000-0000-000000000000",
+      lines: [{ productId: selectedProduct, quantity: parseInt(quantity) }]
+    };
+
+    try {
+      const cRes = await fetch('/api/v1/customers', { headers: { Authorization: `Bearer ${token}` } });
+      const cData = await cRes.json();
+      orderReq.customerId = cData.content[0].id;
+
+      await fetch(`/api/v1/orders/stress-test?count=${stressCount}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(orderReq)
+      });
+      // We don't await result since it's async in backend
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setStressTesting(false);
+    }
+  };
+
   const getWarehouseFillPercentage = (warehouseId) => {
     const items = stockByWarehouse[warehouseId] || [];
     if (items.length === 0) return 0;
-    // Simple heuristic: assuming max capacity is 200 per product for visual purposes
     const totalPhysical = items.reduce((sum, item) => sum + item.quantity, 0);
     const maxCapacity = items.length * 200;
     return Math.min(100, Math.round((totalPhysical / maxCapacity) * 100));
   };
 
-  if (loading) return <div style={{ padding: '40px', fontSize: '24px', fontWeight: 'bold' }}>Initializing Core...</div>;
+  if (loading && warehouses.length === 0) return <div style={{ padding: '40px', fontSize: '24px', fontWeight: 'bold' }}>Initializing STRIDE Core...</div>;
 
   return (
-    <div style={{ minHeight: '100vh', padding: '60px 20px', position: 'relative' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-color)' }}>
       
-      {/* Header */}
-      <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }} className="animate-fade-in">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ background: 'var(--neon-orange)', color: 'white', padding: '12px', borderRadius: '16px', boxShadow: '0 8px 20px rgba(255, 81, 47, 0.3)' }}>
-            <Navigation size={28} />
+      {/* Left Panel: Dashboard Data */}
+      <div style={{ flex: 1, padding: '40px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '30px' }}>
+        
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{ background: 'var(--neon-orange)', color: 'white', padding: '12px', borderRadius: '16px', boxShadow: '0 8px 20px rgba(255, 81, 47, 0.3)' }}>
+              <Activity size={28} />
+            </div>
+            <div>
+              <h1 style={{ fontSize: '32px', letterSpacing: '-0.02em', lineHeight: 1 }}>STRIDE Console</h1>
+              <p style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>Command Center</p>
+            </div>
           </div>
-          <div>
-            <h1 style={{ fontSize: '32px', letterSpacing: '-0.02em', lineHeight: 1 }}>STRIDE</h1>
-            <p style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>Network Overview</p>
-          </div>
+          <button onClick={handleLogout} className="bento-btn-secondary" style={{ padding: '12px 24px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 600 }}>
+            <LogOut size={18} /> Exit
+          </button>
         </div>
-        
-        <button onClick={handleLogout} className="bento-btn-secondary" style={{ padding: '12px 24px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 600 }}>
-          <LogOut size={18} /> Sign Out
-        </button>
-      </div>
 
-      <div className="bento-container animate-fade-in">
-        
-        {/* Stat Box 1 */}
-        <TiltBox className="bento-box">
-          <h3 style={{ color: 'var(--text-secondary)', textTransform: 'uppercase', fontSize: '13px', fontWeight: 700, letterSpacing: '0.05em' }}>Active Nodes</h3>
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
-            <span className="stat-massive">{warehouses.length}</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-tertiary)', fontSize: '14px', fontWeight: 600 }}>
-            <MapPin size={16} /> Fully Operational
-          </div>
-        </TiltBox>
-
-        {/* Stat Box 2 */}
-        <TiltBox className="bento-box">
-          <h3 style={{ color: 'var(--text-secondary)', textTransform: 'uppercase', fontSize: '13px', fontWeight: 700, letterSpacing: '0.05em' }}>Catalog Items</h3>
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
-            <span className="stat-massive" style={{ background: 'linear-gradient(135deg, var(--neon-orange), var(--hot-pink))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{products.length}</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-tertiary)', fontSize: '14px', fontWeight: 600 }}>
-            <Package size={16} /> Monitored SKUs
-          </div>
-        </TiltBox>
-
-        {/* Recent Orders Feed */}
-        <TiltBox className="bento-wide" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <h3 style={{ fontSize: '20px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Clock size={20} /> Live Order Feed
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto', flex: 1 }}>
-            {orders.length === 0 ? (
-              <p style={{ color: 'var(--text-tertiary)' }}>No recent orders found.</p>
-            ) : (
-              orders.map(order => (
-                <div key={order.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: 'rgba(255,255,255,0.6)', borderRadius: '12px', fontSize: '14px', fontWeight: 600 }}>
-                  <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                    <span style={{ color: 'var(--text-tertiary)', fontFamily: 'monospace' }}>{order.id.split('-')[0]}</span>
-                    <span>{order.lines.length} items</span>
-                  </div>
-                  <div style={{ padding: '4px 10px', borderRadius: '12px', background: order.status === 'ROUTED_FULL' ? '#D1FAE5' : order.status === 'CREATED' ? '#FEF3C7' : '#FEE2E2', color: order.status === 'ROUTED_FULL' ? '#065F46' : order.status === 'CREATED' ? '#92400E' : '#991B1B', fontSize: '12px' }}>
-                    {order.status}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </TiltBox>
-
-        {/* Order Simulator (Large) */}
-        <TiltBox className="bento-large" style={{ padding: '40px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          <div>
-            <h2 style={{ fontSize: '32px', marginBottom: '8px' }}>Routing Simulator</h2>
-            <p style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Test the multi-node allocation engine.</p>
-          </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>
           
-          <form onSubmit={handlePlaceOrder} style={{ display: 'flex', gap: '20px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-            <div style={{ flex: 2, minWidth: '200px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Select Product</label>
-              <select className="bento-input" value={selectedProduct} onChange={e => setSelectedProduct(e.target.value)} required>
-                <option value="">-- Choose an item --</option>
-                {products.map(p => (
-                  <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>
-                ))}
-              </select>
+          {/* Simulator & Stress Tester */}
+          <TiltBox className="bento-large" style={{ gridColumn: '1 / -1', padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div>
+              <h2 style={{ fontSize: '28px', marginBottom: '8px' }}>Routing Engine</h2>
+              <p style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Simulate single orders or stress-test concurrent locking.</p>
             </div>
             
-            <div style={{ flex: 1, minWidth: '100px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Quantity</label>
-              <input type="number" min="1" max="1000" className="bento-input" value={quantity} onChange={e => setQuantity(e.target.value)} required />
+            <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div style={{ flex: 2, minWidth: '200px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '10px' }}>PRODUCT</label>
+                <select className="bento-input" value={selectedProduct} onChange={e => setSelectedProduct(e.target.value)} required>
+                  <option value="">-- Choose an item --</option>
+                  {products.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ flex: 1, minWidth: '100px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '10px' }}>QTY</label>
+                <input type="number" min="1" max="1000" className="bento-input" value={quantity} onChange={e => setQuantity(e.target.value)} required />
+              </div>
+
+              <button onClick={handlePlaceOrder} className="bento-btn" style={{ height: '54px', padding: '0 32px' }} disabled={placing || !selectedProduct}>
+                {placing ? 'Routing...' : '1x Route'}
+              </button>
             </div>
 
-            <button type="submit" className="bento-btn" style={{ height: '54px', padding: '0 32px' }} disabled={placing || !selectedProduct}>
-              {placing ? 'Routing...' : 'Simulate'}
-            </button>
-          </form>
+            {/* Stress Test Options */}
+            <div style={{ padding: '20px', background: 'rgba(255, 94, 98, 0.05)', border: '1px solid rgba(255, 94, 98, 0.2)', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <Zap size={24} color="var(--neon-orange)" />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700 }}>Stress Test Mode</div>
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Launch concurrent API requests</div>
+              </div>
+              <input type="number" min="5" max="500" className="bento-input" style={{ width: '80px', height: '40px' }} value={stressCount} onChange={e => setStressCount(e.target.value)} />
+              <button onClick={handleStressTest} className="bento-btn" style={{ background: 'linear-gradient(135deg, #ff0f7b, #f89b29)', height: '40px', padding: '0 24px' }} disabled={stressTesting || !selectedProduct}>
+                Launch {stressCount}x
+              </button>
+            </div>
+            
+            {orderResult && !orderResult.error && (
+              <div className="animate-fade-in" style={{ padding: '16px', background: '#D1FAE5', color: '#065F46', borderRadius: '12px', fontWeight: 600 }}>
+                Single Route Success! Selected Node: {orderResult.lines?.[0]?.allocations?.map(a => warehouses.find(w => w.id === a.warehouseId)?.name).join(', ')}
+              </div>
+            )}
+            {orderResult && orderResult.error && (
+              <div className="animate-fade-in" style={{ padding: '16px', background: '#FEE2E2', color: '#991B1B', borderRadius: '12px', fontWeight: 600 }}>
+                Error: {orderResult.error}
+              </div>
+            )}
+          </TiltBox>
 
-          {/* Results Area */}
-          {orderResult && (
-             <div className="animate-fade-in" style={{ marginTop: 'auto', padding: '24px', background: 'rgba(255,255,255,0.7)', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.9)', boxShadow: 'inset 0 2px 4px rgba(255,255,255,1)' }}>
-                {orderResult.error ? (
-                  <div style={{ color: 'var(--hot-pink)', fontWeight: 600 }}>Error: {orderResult.error}</div>
-                ) : (
+          {/* Warehouses */}
+          {warehouses.map((wh) => {
+            const fillPercent = getWarehouseFillPercentage(wh.id);
+            return (
+              <TiltBox key={wh.id} onClick={() => setSelectedWarehouse(wh)}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#10B981', fontWeight: 700, marginBottom: '16px', fontSize: '18px' }}>
-                      <CheckCircle size={24} /> Optimized Route Generated
-                    </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
-                      {orderResult.lines?.[0]?.allocations?.map(a => {
-                        const wh = warehouses.find(w => w.id === a.warehouseId);
-                        return (
-                          <div key={a.id} style={{ background: 'white', padding: '16px 20px', borderRadius: '16px', boxShadow: '0 4px 15px rgba(0,0,0,0.04)', fontWeight: 600, fontSize: '15px' }}>
-                            <span style={{ color: 'var(--neon-orange)', fontSize: '18px', marginRight: '6px' }}>{a.quantityAllocated}x</span> from {wh?.name || a.warehouseId}
-                          </div>
-                        );
-                      })}
-                    </div>
+                    <h3 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '4px' }}>{wh.name}</h3>
+                    <p style={{ color: 'var(--text-tertiary)', fontSize: '13px', fontWeight: 500 }}>{wh.address}</p>
                   </div>
-                )}
-             </div>
-          )}
-        </TiltBox>
-
-        {/* Warehouses */}
-        {warehouses.map((wh, idx) => {
-          const fillPercent = getWarehouseFillPercentage(wh.id);
-          return (
-            <TiltBox key={wh.id} onClick={() => setSelectedWarehouse(wh)}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
-                <div>
-                  <h3 style={{ fontSize: '22px', fontWeight: 700, marginBottom: '4px' }}>{wh.name}</h3>
-                  <p style={{ color: 'var(--text-tertiary)', fontSize: '14px', fontWeight: 500 }}>{wh.address}</p>
                 </div>
-                <div style={{ background: 'var(--text-primary)', color: 'white', padding: '6px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 700 }}>
-                  Active
+                <div style={{ marginTop: 'auto' }}>
+                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '10px', fontWeight: 700 }}>
+                     <span style={{ color: 'var(--text-secondary)' }}>Capacity</span>
+                     <span style={{ color: 'var(--text-primary)' }}>{fillPercent}%</span>
+                   </div>
+                   <div style={{ width: '100%', height: '8px', background: 'rgba(0,0,0,0.04)', borderRadius: '4px', overflow: 'hidden' }}>
+                     <div style={{ width: `${fillPercent}%`, height: '100%', background: 'linear-gradient(90deg, var(--neon-orange), var(--hot-pink))', borderRadius: '4px', transition: 'width 0.5s' }}></div>
+                   </div>
                 </div>
-              </div>
-              
-              <div style={{ marginTop: 'auto' }}>
-                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '10px', fontWeight: 700 }}>
-                   <span style={{ color: 'var(--text-secondary)' }}>Capacity Load</span>
-                   <span style={{ color: 'var(--text-primary)' }}>{fillPercent}%</span>
-                 </div>
-                 <div style={{ width: '100%', height: '8px', background: 'rgba(0,0,0,0.04)', borderRadius: '4px', overflow: 'hidden' }}>
-                   <div style={{ width: `${fillPercent}%`, height: '100%', background: 'linear-gradient(90deg, var(--neon-orange), var(--hot-pink))', borderRadius: '4px', transition: 'width 0.5s ease-in-out' }}></div>
-                 </div>
-                 <p style={{ marginTop: '12px', fontSize: '12px', color: 'var(--text-tertiary)', textAlign: 'right' }}>Click to inspect inventory →</p>
-              </div>
-            </TiltBox>
-          );
-        })}
+              </TiltBox>
+            );
+          })}
 
+          {/* Live Order Feed */}
+          <TiltBox className="bento-wide" style={{ gridColumn: '1 / -1', maxHeight: '300px', display: 'flex', flexDirection: 'column' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Clock size={18} /> Live Order Feed (Auto-updating)
+            </h3>
+            <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {orders.map(order => (
+                <div key={order.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', background: 'rgba(255,255,255,0.7)', borderRadius: '8px', fontSize: '13px', fontWeight: 600 }}>
+                  <span style={{ fontFamily: 'monospace', color: 'var(--text-secondary)' }}>{order.id.split('-')[0]}</span>
+                  <span style={{ color: order.status === 'ROUTED_FULL' ? '#059669' : order.status === 'CREATED' ? '#D97706' : '#DC2626' }}>{order.status}</span>
+                </div>
+              ))}
+            </div>
+          </TiltBox>
+
+        </div>
       </div>
 
-      {/* Warehouse Inspection Modal */}
+      {/* Right Panel: Map (Digital Twin) */}
+      <div style={{ flex: 1, position: 'relative', borderLeft: '1px solid rgba(0,0,0,0.1)' }}>
+        <MapContainer center={[39.8283, -98.5795]} zoom={4} style={{ width: '100%', height: '100%' }} zoomControl={false}>
+          <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
+          
+          {/* Warehouses */}
+          {warehouses.map(wh => {
+            const coords = WAREHOUSE_COORDS[wh.name];
+            if (!coords) return null;
+            const fill = getWarehouseFillPercentage(wh.id);
+            return (
+              <CircleMarker key={wh.id} center={coords} radius={12} pathOptions={{ color: 'var(--neon-orange)', fillColor: 'var(--hot-pink)', fillOpacity: 0.8 }}>
+                <Popup>
+                  <strong>{wh.name}</strong><br/>
+                  Capacity: {fill}%
+                </Popup>
+              </CircleMarker>
+            );
+          })}
+
+          {/* Active Routes (Animation) */}
+          {activeRoutes.map(route => (
+            <Polyline key={route.id} positions={[route.start, route.end]} pathOptions={{ color: 'var(--neon-orange)', weight: 3, dashArray: '10, 10', className: 'route-animation' }} />
+          ))}
+        </MapContainer>
+
+        <div style={{ position: 'absolute', top: '24px', left: '24px', zIndex: 400, background: 'rgba(255,255,255,0.9)', padding: '12px 20px', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', backdropFilter: 'blur(10px)', fontWeight: 700, fontSize: '14px' }}>
+          STRIDE Digital Twin Map
+        </div>
+      </div>
+
+      {/* Warehouse Modal */}
       {selectedWarehouse && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(10px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-          <div className="bento-box animate-fade-in" style={{ maxWidth: '600px', width: '100%', padding: '40px', position: 'relative' }}>
-            <button onClick={() => setSelectedWarehouse(null)} style={{ position: 'absolute', top: '24px', right: '24px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)' }}>
-              <X size={24} />
-            </button>
-            <h2 style={{ fontSize: '28px', marginBottom: '8px' }}>{selectedWarehouse.name}</h2>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '32px' }}>Live Stock Inventory</p>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {(stockByWarehouse[selectedWarehouse.id] || []).length === 0 ? (
-                <p style={{ color: 'var(--text-tertiary)', fontWeight: 600 }}>No stock items found.</p>
-              ) : (
-                (stockByWarehouse[selectedWarehouse.id] || []).map(stock => {
-                  const prod = products.find(p => p.id === stock.productId);
-                  return (
-                    <div key={stock.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.03)', padding: '16px', borderRadius: '16px' }}>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: '16px', color: 'var(--text-primary)' }}>{prod?.name || stock.productId}</div>
-                        <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>SKU: {prod?.sku}</div>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--neon-orange)' }}>{stock.available}</div>
-                        <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', fontWeight: 600 }}>Available ({stock.reservedQuantity} reserved)</div>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(10px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="bento-box animate-fade-in" style={{ width: '500px', padding: '32px', position: 'relative' }}>
+            <button onClick={() => setSelectedWarehouse(null)} style={{ position: 'absolute', top: '20px', right: '20px', background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} /></button>
+            <h2 style={{ fontSize: '24px', marginBottom: '24px' }}>{selectedWarehouse.name} Inventory</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {(stockByWarehouse[selectedWarehouse.id] || []).map(stock => {
+                const prod = products.find(p => p.id === stock.productId);
+                return (
+                  <div key={stock.id} style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(0,0,0,0.03)', padding: '12px', borderRadius: '8px' }}>
+                    <div style={{ fontWeight: 700 }}>{prod?.name}</div>
+                    <div style={{ color: 'var(--neon-orange)', fontWeight: 800 }}>{stock.availableToPromise}</div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
       )}
 
+      <style dangerouslySetInnerHTML={{__html: `
+        .route-animation {
+          stroke-dashoffset: 1000;
+          animation: dash 3s linear forwards;
+        }
+        @keyframes dash {
+          to { stroke-dashoffset: 0; }
+        }
+      `}} />
     </div>
   );
 }

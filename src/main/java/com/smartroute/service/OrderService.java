@@ -107,6 +107,18 @@ public class OrderService {
         throw new StockConflictException("Unable to allocate stock after repeated contention", ex);
     }
 
+    public void stressTest(int count, OrderRequest request) {
+        for (int i = 0; i < count; i++) {
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                try {
+                    placeOrder(request);
+                } catch (Exception e) {
+                    // Ignore failures during stress test
+                }
+            });
+        }
+    }
+
     @Transactional(readOnly = true)
     public PageResponse<OrderResponse> findAll(OrderStatus status, UUID customerId, Pageable pageable) {
         Page<Order> page;

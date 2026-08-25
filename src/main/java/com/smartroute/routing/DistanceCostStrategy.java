@@ -14,9 +14,11 @@ import java.util.*;
 public final class DistanceCostStrategy implements RoutingStrategy {
 
     private final RoutingProperties props;
+    private final com.smartroute.service.ShippingCarrierService carrierService;
 
-    public DistanceCostStrategy(RoutingProperties props) {
+    public DistanceCostStrategy(RoutingProperties props, com.smartroute.service.ShippingCarrierService carrierService) {
         this.props = props;
+        this.carrierService = carrierService;
     }
 
     @Override
@@ -40,8 +42,8 @@ public final class DistanceCostStrategy implements RoutingStrategy {
             final int reqQty = remaining;
             double minDist = candidates.stream().mapToDouble(s -> distance(s, customerLat, customerLng)).min().orElse(0);
             double maxDist = candidates.stream().mapToDouble(s -> distance(s, customerLat, customerLng)).max().orElse(0);
-            double minCost = candidates.stream().mapToDouble(StockSnapshot::costFactor).min().orElse(0);
-            double maxCost = candidates.stream().mapToDouble(StockSnapshot::costFactor).max().orElse(0);
+            double minCost = candidates.stream().mapToDouble(s -> carrierService.getBestCarrier(distance(s, customerLat, customerLng), reqQty * 2.0).cost()).min().orElse(0);
+            double maxCost = candidates.stream().mapToDouble(s -> carrierService.getBestCarrier(distance(s, customerLat, customerLng), reqQty * 2.0).cost()).max().orElse(0);
 
             List<StockSnapshot> ranked = candidates.stream()
                 .sorted(Comparator.comparingDouble(s ->
@@ -85,10 +87,15 @@ public final class DistanceCostStrategy implements RoutingStrategy {
 
     private ScoreBreakdown breakdownOf(StockSnapshot s, double lat, double lng, int needed,
                                        double minDist, double maxDist, double minCost, double maxCost) {
+        double dist = distance(s, lat, lng);
         double dNorm = (maxDist == minDist) ? 0.5
-            : (distance(s, lat, lng) - minDist) / (maxDist - minDist);
+            : (dist - minDist) / (maxDist - minDist);
+        
+        // Calculate dynamic real-world carrier cost instead of static costFactor
+        double realCost = carrierService.getBestCarrier(dist, needed * 2.0).cost();
         double cNorm = (maxCost == minCost) ? 0.5
-            : (s.costFactor() - minCost) / (maxCost - minCost);
+            : (realCost - minCost) / (maxCost - minCost);
+            
         double shortfall = Math.max(0, (needed - s.available()) / (double) needed);
         return new ScoreBreakdown(dNorm, cNorm, shortfall);
     }
