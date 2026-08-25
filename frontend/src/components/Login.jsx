@@ -1,34 +1,13 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogIn, Activity, AlertCircle } from 'lucide-react';
+import { Activity, Lock, Mail, ArrowRight, AlertCircle, Sparkles, ShieldCheck } from 'lucide-react';
 
 export default function Login({ setAuth }) {
-  const [email, setEmail] = useState('admin@stride.com');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('admin@stride.io');
+  const [password, setPassword] = useState('admin123');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
-  const boxRef = useRef(null);
-
-  const handleMouseMove = (e) => {
-    if (!boxRef.current) return;
-    const rect = boxRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
-    
-    const rotateX = ((y - centerY) / centerY) * -10;
-    const rotateY = ((x - centerX) / centerX) * 10;
-    
-    boxRef.current.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(10px)`;
-  };
-
-  const handleMouseLeave = () => {
-    if (!boxRef.current) return;
-    boxRef.current.style.transform = `perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(0px)`;
-  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -41,9 +20,9 @@ export default function Login({ setAuth }) {
         body: JSON.stringify({ email, password })
       });
       if (res.status === 401) {
-        throw new Error('Invalid email or password');
+        throw new Error('Invalid credentials. Please verify email and password.');
       } else if (!res.ok) {
-        throw new Error(`Server error: Backend might be down (${res.status})`);
+        throw new Error(`Connection error (${res.status}). Ensure backend is active.`);
       }
       const data = await res.json();
       setAuth(data.accessToken);
@@ -55,121 +34,155 @@ export default function Login({ setAuth }) {
     }
   };
 
+  const handleAutofill = () => {
+    setEmail('admin@stride.io');
+    setPassword('admin123');
+  };
+
   return (
     <div style={{
       minHeight: '100vh',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '20px'
+      padding: '24px',
+      position: 'relative'
     }}>
-      <div 
-        ref={boxRef}
-        className="bento-box animate-fade-in" 
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
-        style={{
-          maxWidth: '480px',
-          width: '100%',
-          padding: '48px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '32px'
-        }}
-      >
-        <div style={{ textAlign: 'center' }}>
+      <div className="app-ambient-glow" />
+
+      <div className="glass-card animate-fade-in" style={{
+        maxWidth: '460px',
+        width: '100%',
+        padding: '44px 38px',
+        background: 'rgba(14, 21, 38, 0.85)',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        boxShadow: '0 20px 60px -15px rgba(0, 0, 0, 0.8), 0 0 40px -10px rgba(99, 102, 241, 0.25)'
+      }}>
+        
+        {/* Brand Icon & Heading */}
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <div style={{
-            width: '64px',
-            height: '64px',
-            background: 'var(--neon-orange)',
-            borderRadius: '20px',
+            width: '56px',
+            height: '56px',
+            background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
+            borderRadius: '16px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            margin: '0 auto 24px auto',
-            boxShadow: '0 8px 25px rgba(255, 81, 47, 0.4)',
-            color: 'white',
-            transform: 'translateZ(20px)'
+            margin: '0 auto 16px auto',
+            boxShadow: '0 0 30px rgba(99, 102, 241, 0.5)'
           }}>
-            <Activity size={32} />
+            <Activity size={30} color="white" />
           </div>
-          <h1 style={{ fontSize: '36px', color: 'var(--text-primary)', marginBottom: '8px', transform: 'translateZ(15px)' }}>
-            STRIDE
+          <h1 style={{ fontSize: '28px', color: '#F8FAFC', marginBottom: '6px', letterSpacing: '-0.03em' }}>
+            STRIDE Console
           </h1>
-          <p style={{ color: 'var(--text-secondary)', fontWeight: 500, transform: 'translateZ(10px)' }}>
-            Enterprise Intelligent Order Routing
+          <p style={{ color: 'var(--text-muted)', fontSize: '14px', fontWeight: 500 }}>
+            Autonomous Multi-Node Fulfillment Platform
           </p>
         </div>
 
-        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '24px', transform: 'translateZ(15px)' }}>
-          {error && (
-            <div style={{
-              background: 'rgba(221, 36, 118, 0.1)',
-              color: 'var(--hot-pink)',
-              padding: '16px',
-              borderRadius: '16px',
-              fontSize: '14px',
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
+        {/* Error Notification */}
+        {error && (
+          <div style={{
+            background: 'rgba(244, 63, 94, 0.15)',
+            border: '1px solid rgba(244, 63, 94, 0.3)',
+            color: '#FB7185',
+            padding: '12px 16px',
+            borderRadius: '12px',
+            fontSize: '13px',
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: '20px'
+          }}>
+            <AlertCircle size={16} />
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          <div>
+            <label style={{
+              display: 'block',
+              fontSize: '12px',
+              fontWeight: 700,
+              color: 'var(--text-muted)',
+              marginBottom: '8px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em'
             }}>
-              <AlertCircle size={18} />
-              {error}
+              Email Address
+            </label>
+            <div style={{ position: 'relative' }}>
+              <Mail size={16} style={{ position: 'absolute', left: '14px', top: '14px', color: 'var(--text-dim)' }} />
+              <input 
+                type="email" 
+                className="form-input" 
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                style={{ paddingLeft: '40px', height: '46px' }}
+                placeholder="name@company.com"
+                required
+              />
             </div>
-          )}
-
-          <div>
-            <label style={{
-              display: 'block',
-              fontSize: '13px',
-              fontWeight: 700,
-              color: 'var(--text-secondary)',
-              marginBottom: '10px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em'
-            }}>Email Address</label>
-            <input 
-              type="email" 
-              className="bento-input" 
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              required
-            />
           </div>
 
           <div>
             <label style={{
               display: 'block',
-              fontSize: '13px',
+              fontSize: '12px',
               fontWeight: 700,
-              color: 'var(--text-secondary)',
-              marginBottom: '10px',
+              color: 'var(--text-muted)',
+              marginBottom: '8px',
               textTransform: 'uppercase',
               letterSpacing: '0.05em'
-            }}>Password</label>
-            <input 
-              type="password" 
-              className="bento-input"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              required
-            />
+            }}>
+              Password
+            </label>
+            <div style={{ position: 'relative' }}>
+              <Lock size={16} style={{ position: 'absolute', left: '14px', top: '14px', color: 'var(--text-dim)' }} />
+              <input 
+                type="password" 
+                className="form-input"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                style={{ paddingLeft: '40px', height: '46px' }}
+                placeholder="••••••••"
+                required
+              />
+            </div>
           </div>
 
-          <button type="submit" className="bento-btn" style={{ marginTop: '16px' }} disabled={loading}>
-            {loading ? 'Authenticating...' : (
+          <button 
+            type="submit" 
+            className="btn-primary" 
+            style={{ height: '48px', marginTop: '8px', fontSize: '15px' }} 
+            disabled={loading}
+          >
+            {loading ? 'Verifying Security Context...' : (
               <>
-                <LogIn size={20} />
-                Sign In
+                Sign In to Console <ArrowRight size={16} />
               </>
             )}
           </button>
         </form>
 
-        <div style={{ textAlign: 'center', fontSize: '13px', color: 'var(--text-tertiary)', fontWeight: 500, transform: 'translateZ(5px)' }}>
-          System initialized with default demo credentials.
+        {/* Demo Credentials Quick Fill Pill */}
+        <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <ShieldCheck size={14} color="#10B981" /> Demo Access Active
+          </div>
+          <button 
+            type="button" 
+            onClick={handleAutofill}
+            style={{ background: 'none', border: 'none', color: '#818CF8', fontSize: '12px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+          >
+            <Sparkles size={13} /> Fill Demo Admin
+          </button>
         </div>
+
       </div>
     </div>
   );

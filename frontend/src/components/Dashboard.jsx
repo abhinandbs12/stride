@@ -1,50 +1,17 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Package, MapPin, LogOut, Navigation, CheckCircle, Clock, X, Zap, Activity, FileText, Truck } from 'lucide-react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker } from 'react-leaflet';
+import React, { useEffect, useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { MapContainer, TileLayer, CircleMarker, Popup, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
+import { 
+  Building2, Layers, Cpu, Zap, Leaf, RefreshCw, FileText, 
+  Truck, ArrowRight, CheckCircle2, AlertTriangle, Play, X 
+} from 'lucide-react';
+import AppLayout from './AppLayout';
 
 const WAREHOUSE_COORDS = {
-  'Central Hub': [41.8781, -87.6298],
-  'East Coast Distribution': [40.7357, -74.1724],
-  'West Coast Fulfillment': [34.0522, -118.2437]
-};
-
-const TiltBox = ({ children, className, style, onClick }) => {
-  const boxRef = useRef(null);
-
-  const handleMouseMove = (e) => {
-    if (!boxRef.current) return;
-    const rect = boxRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
-    
-    const rotateX = ((y - centerY) / centerY) * -5;
-    const rotateY = ((x - centerX) / centerX) * 5;
-    
-    boxRef.current.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
-  };
-
-  const handleMouseLeave = () => {
-    if (!boxRef.current) return;
-    boxRef.current.style.transform = `perspective(1000px) rotateX(0deg) rotateY(0deg)`;
-  };
-
-  return (
-    <div 
-      ref={boxRef}
-      className={`bento-box ${className || ''}`}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      onClick={onClick}
-      style={{ ...style, cursor: onClick ? 'pointer' : 'default' }}
-    >
-      {children}
-    </div>
-  );
+  'Central Hub': [41.8781, -87.6298],       // Chicago
+  'East Coast Node': [40.7128, -74.0060],   // New York
+  'West Coast Node': [34.0522, -118.2437]   // Los Angeles
 };
 
 export default function Dashboard({ token, setAuth }) {
@@ -53,6 +20,7 @@ export default function Dashboard({ token, setAuth }) {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [stockByWarehouse, setStockByWarehouse] = useState({});
+  const [transfers, setTransfers] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Order Simulator State
@@ -60,17 +28,15 @@ export default function Dashboard({ token, setAuth }) {
   const [quantity, setQuantity] = useState(1);
   const [orderResult, setOrderResult] = useState(null);
   const [placing, setPlacing] = useState(false);
-  
+  const [ecoMode, setEcoMode] = useState(true);
+
   // Stress Test State
   const [stressTesting, setStressTesting] = useState(false);
   const [stressCount, setStressCount] = useState(10);
+  const [stressResult, setStressResult] = useState(null);
 
   // Map Animation State
   const [activeRoutes, setActiveRoutes] = useState([]);
-  const [transfers, setTransfers] = useState([]);
-  const [ecoMode, setEcoMode] = useState(true);
-
-  // Modal State
   const [selectedWarehouse, setSelectedWarehouse] = useState(null);
 
   const fetchData = async () => {
@@ -85,6 +51,7 @@ export default function Dashboard({ token, setAuth }) {
 
       if (whRes.status === 401) {
         setAuth(null);
+        navigate('/login');
         return;
       }
 
@@ -94,8 +61,15 @@ export default function Dashboard({ token, setAuth }) {
       const stockData = await stockRes.json();
       const trfData = await trfRes.json();
 
-      setWarehouses(whData.content || whData);
-      setProducts(prData.content || prData);
+      const whList = whData.content || whData;
+      const prList = prData.content || prData;
+
+      setWarehouses(whList);
+      setProducts(prList);
+      if (!selectedProduct && prList.length > 0) {
+        setSelectedProduct(prList[0].id);
+      }
+
       setOrders(ordData.content || ordData);
       setTransfers(Array.isArray(trfData) ? trfData : []);
 
@@ -121,63 +95,50 @@ export default function Dashboard({ token, setAuth }) {
       return;
     }
     fetchData();
-    // Auto refresh data every 3 seconds for stress test monitoring
-    const interval = setInterval(fetchData, 3000);
+    const interval = setInterval(fetchData, 4000);
     return () => clearInterval(interval);
   }, [token, navigate, setAuth]);
 
-  const handleLogout = () => {
-    setAuth(null);
-    navigate('/login');
-  };
-  
-  const triggerMapAnimation = (orderData) => {
-    // Basic mapping animation from warehouse to random customer location near center US
-    if(!orderData.lines || !orderData.lines[0] || !orderData.lines[0].allocations) return;
-    
-    const customerLat = 38.0 + (Math.random() * 4 - 2);
-    const customerLng = -95.0 + (Math.random() * 10 - 5);
-    const cLoc = [customerLat, customerLng];
-
-    const newRoutes = orderData.lines[0].allocations.map(a => {
-      const wh = warehouses.find(w => w.id === a.warehouseId);
-      const start = WAREHOUSE_COORDS[wh?.name] || [40, -100];
-      return { id: Math.random(), start, end: cLoc };
-    });
-
-    setActiveRoutes(prev => [...prev, ...newRoutes]);
-    setTimeout(() => {
-      setActiveRoutes(prev => prev.filter(r => !newRoutes.find(nr => nr.id === r.id)));
-    }, 3000);
-  };
-
-  const handlePlaceOrder = async (e) => {
-    if(e) e.preventDefault();
+  const handlePlaceOrder = async () => {
+    if (!selectedProduct) return;
     setPlacing(true);
     setOrderResult(null);
-
-    const orderReq = {
-      customerId: "00000000-0000-0000-0000-000000000000",
-      lines: [{ productId: selectedProduct, quantity: parseInt(quantity) }]
-    };
-
     try {
-      const cRes = await fetch('/api/v1/customers', { headers: { Authorization: `Bearer ${token}` } });
-      const cData = await cRes.json();
-      const customer = cData.content[0]; 
-      orderReq.customerId = customer.id;
-
       const res = await fetch('/api/v1/orders', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(orderReq)
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          customerId: '8f3b2075-81fa-4f91-9e23-74a6bfb3017a',
+          lines: [{ productId: selectedProduct, quantity: parseInt(quantity) }]
+        })
       });
-      
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || 'Routing failed');
+      }
+
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Routing failed');
-      
       setOrderResult(data);
-      triggerMapAnimation(data);
+
+      // Trigger map route animation
+      if (data.lines && data.lines.length > 0 && data.lines[0].allocations?.length > 0) {
+        const alloc = data.lines[0].allocations[0];
+        const wh = warehouses.find(w => w.id === alloc.warehouseId);
+        if (wh && WAREHOUSE_COORDS[wh.name]) {
+          const start = WAREHOUSE_COORDS[wh.name];
+          const end = [data.customer?.latitude || 45.5152, data.customer?.longitude || -122.6784];
+          const newRoute = { id: Date.now(), start, end };
+          setActiveRoutes(prev => [...prev, newRoute]);
+          setTimeout(() => {
+            setActiveRoutes(prev => prev.filter(r => r.id !== newRoute.id));
+          }, 4500);
+        }
+      }
+
       await fetchData();
     } catch (err) {
       setOrderResult({ error: err.message });
@@ -186,271 +147,366 @@ export default function Dashboard({ token, setAuth }) {
     }
   };
 
-  const handleStressTest = async (e) => {
-    e.preventDefault();
+  const handleStressTest = async () => {
     setStressTesting(true);
-    const orderReq = {
-      customerId: "00000000-0000-0000-0000-000000000000",
-      lines: [{ productId: selectedProduct, quantity: parseInt(quantity) }]
-    };
-
+    setStressResult(null);
     try {
-      const cRes = await fetch('/api/v1/customers', { headers: { Authorization: `Bearer ${token}` } });
-      const cData = await cRes.json();
-      orderReq.customerId = cData.content[0].id;
-
-      await fetch(`/api/v1/orders/stress-test?count=${stressCount}`, {
+      const prodId = selectedProduct || (products[0] ? products[0].id : '6b9e73b2-e192-4f81-a67b-12d7bf394e11');
+      const res = await fetch(`/api/v1/orders/stress-test?count=${stressCount}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(orderReq)
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          customerId: '8f3b2075-81fa-4f91-9e23-74a6bfb3017a',
+          lines: [{ productId: prodId, quantity: 1 }]
+        })
       });
-      // We don't await result since it's async in backend
+
+      if (!res.ok) throw new Error('Stress test execution failed');
+      const data = await res.json();
+      setStressResult(data);
+      await fetchData();
     } catch (err) {
-      console.error(err);
+      setStressResult({ error: err.message });
     } finally {
       setStressTesting(false);
     }
   };
 
-  const getWarehouseFillPercentage = (warehouseId) => {
-    const items = stockByWarehouse[warehouseId] || [];
-    if (items.length === 0) return 0;
-    const totalPhysical = items.reduce((sum, item) => sum + item.quantity, 0);
-    const maxCapacity = items.length * 200;
-    return Math.min(100, Math.round((totalPhysical / maxCapacity) * 100));
-  };
-
-  if (loading && warehouses.length === 0) return <div style={{ padding: '40px', fontSize: '24px', fontWeight: 'bold' }}>Initializing STRIDE Core...</div>;
+  // Calculate cluster stats
+  let totalAvailableStock = 0;
+  Object.values(stockByWarehouse).forEach(items => {
+    items.forEach(i => { totalAvailableStock += (i.availableToPromise || 0); });
+  });
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-color)' }}>
+    <AppLayout token={token} setAuth={setAuth}>
       
-      {/* Left Panel: Dashboard Data */}
-      <div style={{ flex: 1, padding: '40px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '30px' }}>
-        
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{ background: 'var(--neon-orange)', color: 'white', padding: '12px', borderRadius: '16px', boxShadow: '0 8px 20px rgba(255, 81, 47, 0.3)' }}>
-              <Activity size={28} />
-            </div>
-            <div>
-              <h1 style={{ fontSize: '32px', letterSpacing: '-0.02em', lineHeight: 1 }}>STRIDE Console</h1>
-              <p style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>Command Center</p>
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <button onClick={() => navigate('/station')} className="bento-btn" style={{ padding: '10px 16px', borderRadius: '14px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '13px', background: 'linear-gradient(135deg, #10B981, #059669)' }}>
-              🏬 Floor Station
-            </button>
-            <button onClick={() => navigate('/developer')} className="bento-btn" style={{ padding: '10px 16px', borderRadius: '14px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '13px', background: 'linear-gradient(135deg, #F59E0B, #D97706)' }}>
-              🔑 Developers
-            </button>
-            <button onClick={() => navigate('/track')} className="bento-btn" style={{ padding: '10px 16px', borderRadius: '14px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '13px', background: 'linear-gradient(135deg, #6366F1, #4F46E5)' }}>
-              📦 Tracker
-            </button>
-            <button onClick={() => navigate('/analytics')} className="bento-btn" style={{ padding: '10px 16px', borderRadius: '14px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '13px' }}>
-              📊 Analytics
-            </button>
-            <button onClick={handleLogout} className="bento-btn-secondary" style={{ padding: '10px 16px', borderRadius: '14px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}>
-              <LogOut size={16} /> Exit
-            </button>
-          </div>
+      {/* Top Telemetry Header */}
+      <div className="app-header">
+        <div>
+          <h1 style={{ fontSize: '20px', margin: 0, fontWeight: 800 }}>Digital Twin Control Center</h1>
+          <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Real-time inventory topology and multi-factor routing engine</p>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>
+        {/* Global Cluster KPIs */}
+        <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: 700 }}>ACTIVE HUBS</div>
+            <div style={{ fontSize: '16px', fontWeight: 800, color: '#38BDF8' }}>{warehouses.length} Nodes</div>
+          </div>
+          <div style={{ width: '1px', height: '24px', background: 'var(--border-subtle)' }} />
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: 700 }}>AVAILABLE STOCK</div>
+            <div style={{ fontSize: '16px', fontWeight: 800, color: '#34D399' }}>{totalAvailableStock} Units</div>
+          </div>
+          <div style={{ width: '1px', height: '24px', background: 'var(--border-subtle)' }} />
+          <button 
+            onClick={fetchData} 
+            className="btn-secondary" 
+            style={{ padding: '8px 12px', borderRadius: '10px', fontSize: '12px' }}
+            title="Refresh Cluster Telemetry"
+          >
+            <RefreshCw size={14} />
+          </button>
+        </div>
+      </div>
+
+      {/* Main Split Screen */}
+      <div style={{ display: 'grid', gridTemplateColumns: '460px 1fr', flex: 1, minHeight: 'calc(100vh - 70px)' }}>
+        
+        {/* Left Side: Operations & Simulator Panel */}
+        <div style={{ 
+          padding: '28px', borderRight: '1px solid var(--border-subtle)', 
+          display: 'flex', flexDirection: 'column', gap: '24px', background: 'var(--bg-sidebar)',
+          overflowY: 'auto'
+        }}>
           
-          {/* Simulator & Stress Tester */}
-          <TiltBox className="bento-large" style={{ gridColumn: '1 / -1', padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <div>
-              <h2 style={{ fontSize: '28px', marginBottom: '8px' }}>Routing Engine</h2>
-              <p style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Simulate single orders or stress-test concurrent locking.</p>
+          {/* Order Simulation & Concurrency Card */}
+          <div className="glass-card" style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Zap size={18} color="#818CF8" />
+                <h2 style={{ fontSize: '17px', margin: 0 }}>Intelligent Routing Simulator</h2>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setEcoMode(!ecoMode)}
+                style={{ 
+                  background: ecoMode ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.05)',
+                  border: ecoMode ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid var(--border-subtle)',
+                  color: ecoMode ? '#34D399' : 'var(--text-dim)',
+                  padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 800, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: '4px'
+                }}
+              >
+                <Leaf size={12} /> {ecoMode ? 'Eco-Routing ON' : 'Eco-Routing OFF'}
+              </button>
             </div>
-            
-            <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-              <div style={{ flex: 2, minWidth: '200px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '10px' }}>PRODUCT</label>
-                <select className="bento-input" value={selectedProduct} onChange={e => setSelectedProduct(e.target.value)} required>
-                  <option value="">-- Choose an item --</option>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>
+                  Target SKU
+                </label>
+                <select 
+                  className="form-select" 
+                  value={selectedProduct} 
+                  onChange={e => setSelectedProduct(e.target.value)}
+                >
                   {products.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
+                    <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>
                   ))}
                 </select>
               </div>
-              <div style={{ flex: 1, minWidth: '100px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '10px' }}>QTY</label>
-                <input type="number" min="1" max="1000" className="bento-input" value={quantity} onChange={e => setQuantity(e.target.value)} required />
+
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <div style={{ width: '100px' }}>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>
+                    Quantity
+                  </label>
+                  <input 
+                    type="number" 
+                    min="1" 
+                    max="500" 
+                    className="form-input" 
+                    value={quantity} 
+                    onChange={e => setQuantity(e.target.value)} 
+                  />
+                </div>
+
+                <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end' }}>
+                  <button 
+                    onClick={handlePlaceOrder} 
+                    className="btn-primary" 
+                    style={{ width: '100%', height: '46px' }}
+                    disabled={placing || !selectedProduct}
+                  >
+                    {placing ? 'Optimizing...' : '⚡ Route Order'}
+                  </button>
+                </div>
               </div>
-
-              <button onClick={handlePlaceOrder} className="bento-btn" style={{ height: '54px', padding: '0 32px' }} disabled={placing || !selectedProduct}>
-                {placing ? 'Routing...' : '1x Route'}
-              </button>
-
-              <button 
-                type="button"
-                onClick={() => setEcoMode(!ecoMode)}
-                className="bento-btn-secondary"
-                style={{ 
-                  height: '54px', padding: '0 20px', borderRadius: '16px', fontWeight: 700, fontSize: '13px',
-                  background: ecoMode ? '#D1FAE5' : 'rgba(0,0,0,0.04)',
-                  color: ecoMode ? '#065F46' : 'var(--text-secondary)',
-                  border: ecoMode ? '1px solid #10B981' : '1px solid transparent',
-                  cursor: 'pointer'
-                }}
-              >
-                🌱 {ecoMode ? 'Eco-Routing: ACTIVE' : 'Eco-Routing: OFF'}
-              </button>
             </div>
 
-            {/* Stress Test Options */}
-            <div style={{ padding: '20px', background: 'rgba(255, 94, 98, 0.05)', border: '1px solid rgba(255, 94, 98, 0.2)', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <Zap size={24} color="var(--neon-orange)" />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700 }}>Stress Test Mode</div>
-                <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Launch concurrent API requests</div>
-              </div>
-              <input type="number" min="5" max="500" className="bento-input" style={{ width: '80px', height: '40px' }} value={stressCount} onChange={e => setStressCount(e.target.value)} />
-              <button onClick={handleStressTest} className="bento-btn" style={{ background: 'linear-gradient(135deg, #ff0f7b, #f89b29)', height: '40px', padding: '0 24px' }} disabled={stressTesting || !selectedProduct}>
-                Launch {stressCount}x
-              </button>
-            </div>
-            
-            {orderResult && !orderResult.error && (
-              <div className="animate-fade-in" style={{ padding: '16px', background: '#D1FAE5', color: '#065F46', borderRadius: '12px', fontWeight: 600 }}>
-                Single Route Success! Selected Node: {orderResult.lines?.[0]?.allocations?.map(a => warehouses.find(w => w.id === a.warehouseId)?.name).join(', ')}
-              </div>
-            )}
-            {orderResult && orderResult.error && (
-              <div className="animate-fade-in" style={{ padding: '16px', background: '#FEE2E2', color: '#991B1B', borderRadius: '12px', fontWeight: 600 }}>
-                Error: {orderResult.error}
-              </div>
-            )}
-          </TiltBox>
-
-          {/* Warehouses */}
-          {warehouses.map((wh) => {
-            const fillPercent = getWarehouseFillPercentage(wh.id);
-            return (
-              <TiltBox key={wh.id} onClick={() => setSelectedWarehouse(wh)}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+            {/* Simulation Result Box */}
+            {orderResult && (
+              <div style={{ marginTop: '18px', padding: '16px', borderRadius: '12px', background: orderResult.error ? 'rgba(244, 63, 94, 0.1)' : 'rgba(99, 102, 241, 0.1)', border: orderResult.error ? '1px solid rgba(244, 63, 94, 0.3)' : '1px solid rgba(99, 102, 241, 0.3)' }}>
+                {orderResult.error ? (
+                  <div style={{ color: '#FB7185', fontSize: '13px', fontWeight: 600 }}>⚠️ {orderResult.error}</div>
+                ) : (
                   <div>
-                    <h3 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '4px' }}>{wh.name}</h3>
-                    <p style={{ color: 'var(--text-tertiary)', fontSize: '13px', fontWeight: 500 }}>{wh.address}</p>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 800, color: '#818CF8' }}>ROUTED SUCCESSFULLY</span>
+                      <span className="status-badge badge-green">{orderResult.status}</span>
+                    </div>
+                    <div style={{ fontSize: '13px', color: 'var(--text-main)', lineHeight: 1.6 }}>
+                      Order Ref: <span className="mono" style={{ color: '#38BDF8' }}>{orderResult.id.substring(0, 8)}...</span>
+                      {orderResult.lines?.[0]?.allocations?.[0] && (
+                        <div style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '4px' }}>
+                          Allocated <strong>{orderResult.lines[0].allocations[0].quantityAllocated} units</strong> from {warehouses.find(w => w.id === orderResult.lines[0].allocations[0].warehouseId)?.name || 'Central Hub'}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div style={{ marginTop: 'auto' }}>
-                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '10px', fontWeight: 700 }}>
-                     <span style={{ color: 'var(--text-secondary)' }}>Capacity</span>
-                     <span style={{ color: 'var(--text-primary)' }}>{fillPercent}%</span>
-                   </div>
-                   <div style={{ width: '100%', height: '8px', background: 'rgba(0,0,0,0.04)', borderRadius: '4px', overflow: 'hidden' }}>
-                     <div style={{ width: `${fillPercent}%`, height: '100%', background: 'linear-gradient(90deg, var(--neon-orange), var(--hot-pink))', borderRadius: '4px', transition: 'width 0.5s' }}></div>
-                   </div>
-                </div>
-              </TiltBox>
-            );
-          })}
+                )}
+              </div>
+            )}
 
-          {/* Live Order Feed */}
-          <TiltBox className="bento-wide" style={{ gridColumn: '1 / -1', maxHeight: '300px', display: 'flex', flexDirection: 'column' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Clock size={18} /> Live Order Feed (Auto-updating)
-            </h3>
-            <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {orders.map(order => (
-                <div key={order.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: 'rgba(255,255,255,0.7)', borderRadius: '12px', fontSize: '13px', fontWeight: 600 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ fontFamily: 'monospace', color: 'var(--text-secondary)' }}>{order.id.split('-')[0]}</span>
-                    <span style={{ padding: '4px 10px', borderRadius: '10px', fontSize: '11px', background: order.status === 'ROUTED_FULL' ? '#D1FAE5' : order.status === 'CREATED' ? '#FEF3C7' : '#EFF6FF', color: order.status === 'ROUTED_FULL' ? '#065F46' : order.status === 'CREATED' ? '#92400E' : '#1E40AF' }}>
-                      {order.status}
-                    </span>
+            {/* Stress Test Section */}
+            <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border-subtle)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>CONCURRENCY STRESS TEST</span>
+                <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontFamily: 'monospace' }}>@Version Lock</span>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {[10, 25, 50].map(cnt => (
+                  <button
+                    key={cnt}
+                    type="button"
+                    onClick={() => setStressCount(cnt)}
+                    className={stressCount === cnt ? 'btn-primary' : 'btn-secondary'}
+                    style={{ flex: 1, padding: '8px', fontSize: '12px', borderRadius: '8px' }}
+                  >
+                    {cnt}x
+                  </button>
+                ))}
+                <button
+                  onClick={handleStressTest}
+                  disabled={stressTesting}
+                  className="btn-primary"
+                  style={{ background: 'linear-gradient(135deg, #F59E0B, #D97706)', padding: '0 16px', fontSize: '12px', borderRadius: '8px' }}
+                >
+                  {stressTesting ? 'Firing...' : 'Fire'}
+                </button>
+              </div>
+
+              {stressResult && (
+                <div style={{ marginTop: '12px', padding: '10px 14px', borderRadius: '8px', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', fontSize: '12px', color: '#FBBF24' }}>
+                  Fired <strong>{stressResult.totalAttempted || stressCount}</strong> concurrent orders • <strong>{stressResult.successfulAllocations || 0}</strong> fulfilled • <strong>{stressResult.concurrencyErrorsPrevented || 0}</strong> overselling collisions stopped.
+                </div>
+              )}
+            </div>
+
+          </div>
+
+          {/* Real-time Order Stream */}
+          <div className="glass-card" style={{ padding: '24px', flex: 1 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Layers size={18} color="#38BDF8" />
+                <h3 style={{ fontSize: '16px', margin: 0 }}>Live Fulfillment Feed</h3>
+              </div>
+              <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>Latest {orders.length}</span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {orders.slice(0, 8).map(ord => (
+                <div key={ord.id} style={{ padding: '12px 14px', borderRadius: '10px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span className="mono" style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-main)' }}>
+                        #{ord.id.substring(0, 6)}
+                      </span>
+                      <span className={`status-badge ${ord.status === 'ALLOCATED' || ord.status === 'SHIPPED' ? 'badge-green' : ord.status === 'PARTIALLY_ALLOCATED' ? 'badge-amber' : 'badge-blue'}`} style={{ fontSize: '10px', padding: '2px 8px' }}>
+                        {ord.status}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '2px' }}>
+                      {ord.customer?.name || 'Customer'} • {ord.lines?.length || 1} SKUs
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+
+                  <div style={{ display: 'flex', gap: '6px' }}>
                     <a 
-                      href={`/api/v1/orders/${order.id}/label`} 
+                      href={`/api/v1/orders/${ord.id}/label`} 
                       target="_blank" 
                       rel="noreferrer"
-                      className="bento-btn-secondary"
-                      style={{ padding: '6px 10px', borderRadius: '8px', fontSize: '11px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}
-                      title="Print 4x6 Thermal Label"
+                      className="btn-secondary"
+                      style={{ padding: '6px 8px', borderRadius: '6px', color: 'var(--text-muted)' }}
+                      title="Download 4x6 Thermal Label"
                     >
-                      <FileText size={13} /> Label
+                      <FileText size={14} />
                     </a>
-                    <button 
-                      onClick={() => navigate(`/track/${order.id}`)}
-                      className="bento-btn-secondary"
-                      style={{ padding: '6px 10px', borderRadius: '8px', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-                      title="Open Customer Tracking Portal"
+                    <Link 
+                      to={`/track/${ord.id}`}
+                      className="btn-secondary"
+                      style={{ padding: '6px 8px', borderRadius: '6px', color: '#818CF8' }}
+                      title="Live Public Tracker"
                     >
-                      <Truck size={13} /> Track
-                    </button>
+                      <Truck size={14} />
+                    </Link>
                   </div>
                 </div>
               ))}
             </div>
-          </TiltBox>
+          </div>
 
         </div>
-      </div>
 
-      {/* Right Panel: Map (Digital Twin) */}
-      <div style={{ flex: 1, position: 'relative', borderLeft: '1px solid rgba(0,0,0,0.1)' }}>
-        <MapContainer center={[39.8283, -98.5795]} zoom={4} style={{ width: '100%', height: '100%' }} zoomControl={false}>
-          <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
-          
-          {/* Warehouses */}
-          {warehouses.map(wh => {
-            const coords = WAREHOUSE_COORDS[wh.name];
-            if (!coords) return null;
-            const fill = getWarehouseFillPercentage(wh.id);
-            return (
-              <CircleMarker key={wh.id} center={coords} radius={12} pathOptions={{ color: 'var(--neon-orange)', fillColor: 'var(--hot-pink)', fillOpacity: 0.8 }}>
-                <Popup>
-                  <strong>{wh.name}</strong><br/>
-                  Capacity: {fill}%
-                </Popup>
-              </CircleMarker>
-            );
-          })}
+        {/* Right Side: Leaflet Digital Twin Map */}
+        <div style={{ position: 'relative', height: '100%', minHeight: '600px' }}>
+          <MapContainer 
+            center={[39.8283, -98.5795]} 
+            zoom={4} 
+            style={{ width: '100%', height: '100%', background: '#090D16' }} 
+            zoomControl={false}
+          >
+            {/* CartoDB Voyager / Dark Matter Tile Layer */}
+            <TileLayer 
+              url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" 
+              attribution="&copy; OpenStreetMap contributors &copy; CARTO"
+            />
+            
+            {/* Warehouses Circle Nodes */}
+            {warehouses.map(wh => {
+              const coords = WAREHOUSE_COORDS[wh.name];
+              if (!coords) return null;
+              const stockItems = stockByWarehouse[wh.id] || [];
+              const totalStock = stockItems.reduce((acc, s) => acc + (s.availableToPromise || 0), 0);
+              return (
+                <CircleMarker 
+                  key={wh.id} 
+                  center={coords} 
+                  radius={14} 
+                  pathOptions={{ color: '#6366F1', fillColor: '#818CF8', fillOpacity: 0.85, weight: 3 }}
+                  eventHandlers={{ click: () => setSelectedWarehouse(wh) }}
+                >
+                  <Popup>
+                    <div style={{ padding: '4px' }}>
+                      <div style={{ fontWeight: 800, fontSize: '14px', color: '#F8FAFC' }}>{wh.name}</div>
+                      <div style={{ fontSize: '12px', color: '#94A3B8', marginTop: '2px' }}>{wh.address}</div>
+                      <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: '11px', color: '#64748B' }}>Available Stock:</span>
+                        <strong style={{ color: '#10B981' }}>{totalStock} units</strong>
+                      </div>
+                    </div>
+                  </Popup>
+                </CircleMarker>
+              );
+            })}
 
-          {/* Active Routes (Animation) */}
-          {activeRoutes.map(route => (
-            <Polyline key={route.id} positions={[route.start, route.end]} pathOptions={{ color: 'var(--neon-orange)', weight: 3, dashArray: '10, 10', className: 'route-animation' }} />
-          ))}
-
-          {/* Inter-Hub Stock Transfers */}
-          {transfers.filter(t => t.status === 'IN_TRANSIT').map(t => {
-            const start = WAREHOUSE_COORDS[t.sourceWarehouseName];
-            const end = WAREHOUSE_COORDS[t.targetWarehouseName];
-            if (!start || !end) return null;
-            return (
+            {/* Active Real-time Delivery Trajectories */}
+            {activeRoutes.map(route => (
               <Polyline 
-                key={t.id} 
-                positions={[start, end]} 
-                pathOptions={{ color: '#8B5CF6', weight: 4, dashArray: '6, 8' }} 
+                key={route.id} 
+                positions={[route.start, route.end]} 
+                pathOptions={{ color: '#6366F1', weight: 4, dashArray: '8, 8' }} 
               />
-            );
-          })}
-        </MapContainer>
+            ))}
 
-        <div style={{ position: 'absolute', top: '24px', left: '24px', zIndex: 400, background: 'rgba(255,255,255,0.9)', padding: '12px 20px', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', backdropFilter: 'blur(10px)', fontWeight: 700, fontSize: '14px' }}>
-          STRIDE Digital Twin Map
+            {/* Inter-Hub Stock Transfers */}
+            {transfers.filter(t => t.status === 'IN_TRANSIT').map(t => {
+              const start = WAREHOUSE_COORDS[t.sourceWarehouseName];
+              const end = WAREHOUSE_COORDS[t.targetWarehouseName];
+              if (!start || !end) return null;
+              return (
+                <Polyline 
+                  key={t.id} 
+                  positions={[start, end]} 
+                  pathOptions={{ color: '#A855F7', weight: 4, dashArray: '6, 10' }} 
+                />
+              );
+            })}
+          </MapContainer>
+
+          {/* Map Overlay Badge */}
+          <div style={{ position: 'absolute', top: '20px', left: '20px', zIndex: 400, background: 'rgba(14, 21, 38, 0.85)', backdropFilter: 'blur(12px)', padding: '10px 18px', borderRadius: '12px', border: '1px solid var(--border-subtle)', boxShadow: '0 8px 30px rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div className="pulse-dot" style={{ background: '#6366F1' }} />
+            <div style={{ fontSize: '13px', fontWeight: 700, color: '#F8FAFC' }}>Digital Twin Network Topology</div>
+          </div>
         </div>
+
       </div>
 
-      {/* Warehouse Modal */}
+      {/* Warehouse Inventory Drilldown Modal */}
       {selectedWarehouse && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(10px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="bento-box animate-fade-in" style={{ width: '500px', padding: '32px', position: 'relative' }}>
-            <button onClick={() => setSelectedWarehouse(null)} style={{ position: 'absolute', top: '20px', right: '20px', background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} /></button>
-            <h2 style={{ fontSize: '24px', marginBottom: '24px' }}>{selectedWarehouse.name} Inventory</h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div className="glass-card animate-fade-in" style={{ width: '100%', maxWidth: '480px', padding: '32px', background: 'var(--bg-surface-elevated)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div>
+                <h3 style={{ fontSize: '20px', margin: 0 }}>{selectedWarehouse.name}</h3>
+                <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Stock Capacity Drilldown</p>
+              </div>
+              <button onClick={() => setSelectedWarehouse(null)} className="btn-secondary" style={{ padding: '6px', borderRadius: '8px' }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '350px', overflowY: 'auto' }}>
               {(stockByWarehouse[selectedWarehouse.id] || []).map(stock => {
                 const prod = products.find(p => p.id === stock.productId);
                 return (
-                  <div key={stock.id} style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(0,0,0,0.03)', padding: '12px', borderRadius: '8px' }}>
-                    <div style={{ fontWeight: 700 }}>{prod?.name}</div>
-                    <div style={{ color: 'var(--neon-orange)', fontWeight: 800 }}>{stock.availableToPromise}</div>
+                  <div key={stock.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-surface)', padding: '12px 16px', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '14px' }}>{prod?.name || 'Item'}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-dim)', fontFamily: 'monospace' }}>SKU: {prod?.sku}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ color: '#34D399', fontWeight: 800, fontSize: '15px' }}>{stock.availableToPromise}</div>
+                      <div style={{ fontSize: '10px', color: 'var(--text-dim)' }}>Reserved: {stock.reservedQuantity}</div>
+                    </div>
                   </div>
                 );
               })}
@@ -459,15 +515,6 @@ export default function Dashboard({ token, setAuth }) {
         </div>
       )}
 
-      <style dangerouslySetInnerHTML={{__html: `
-        .route-animation {
-          stroke-dashoffset: 1000;
-          animation: dash 3s linear forwards;
-        }
-        @keyframes dash {
-          to { stroke-dashoffset: 0; }
-        }
-      `}} />
-    </div>
+    </AppLayout>
   );
 }

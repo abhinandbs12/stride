@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
   Package, Truck, CheckCircle2, Clock, MapPin, Search, 
-  ArrowLeft, FileText, ExternalLink, ShieldCheck 
+  ArrowLeft, FileText, ExternalLink, ShieldCheck, Leaf, Activity 
 } from 'lucide-react';
 import { MapContainer, TileLayer, CircleMarker, Popup, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -48,192 +48,187 @@ export default function TrackingPortal() {
     }
   };
 
-  const getStatusColor = (status) => {
+  const getStatusBadge = (status) => {
     switch (status) {
-      case 'SHIPPED': return { bg: '#D1FAE5', text: '#065F46', label: 'IN TRANSIT' };
-      case 'DELIVERED': return { bg: '#DBEAFE', text: '#1E40AF', label: 'DELIVERED' };
-      case 'PICKED': return { bg: '#FEF3C7', text: '#92400E', label: 'PACKED & READY' };
-      case 'ROUTED_FULL':
-      case 'ROUTED_PARTIAL': return { bg: '#EDE9FE', text: '#5B21B6', label: 'ROUTED TO HUB' };
-      default: return { bg: '#F3F4F6', text: '#374151', label: status || 'PROCESSING' };
+      case 'SHIPPED': return { class: 'badge-green', label: 'IN TRANSIT' };
+      case 'DELIVERED': return { class: 'badge-blue', label: 'DELIVERED' };
+      case 'PICKED': return { class: 'badge-amber', label: 'PACKED & READY' };
+      case 'ALLOCATED':
+      case 'ROUTED_FULL': return { class: 'badge-purple', label: 'ALLOCATED TO HUB' };
+      default: return { class: 'badge-blue', label: status || 'PROCESSING' };
     }
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-color)', padding: '40px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      
-      {/* Top Header */}
-      <div style={{ maxWidth: '1000px', width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg-app)', padding: '40px 24px', position: 'relative' }}>
+      <div className="app-ambient-glow" />
+
+      {/* Top Bar */}
+      <div style={{ maxWidth: '1000px', margin: '0 auto 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ background: 'var(--neon-orange)', color: 'white', padding: '10px', borderRadius: '12px' }}>
-            <Package size={24} />
+          <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Activity size={20} color="white" />
           </div>
           <div>
-            <h1 style={{ fontSize: '24px', fontWeight: 800, letterSpacing: '-0.02em', margin: 0 }}>STRIDE Track</h1>
-            <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>Global Shipment Tracking Network</p>
+            <div style={{ fontSize: '18px', fontWeight: 800, letterSpacing: '-0.02em', color: '#F8FAFC' }}>STRIDE DirectTrack</div>
+            <div style={{ fontSize: '11px', color: 'var(--text-dim)' }}>Global Freight Telemetry</div>
           </div>
         </div>
-        <Link to="/login" style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-secondary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px' }}>
-          Operator Portal <ExternalLink size={14} />
+
+        <Link to="/dashboard" className="btn-secondary" style={{ padding: '8px 16px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <ArrowLeft size={14} /> Back to Console
         </Link>
       </div>
 
-      {/* Search Box */}
-      <div className="bento-box animate-fade-in" style={{ maxWidth: '1000px', width: '100%', padding: '24px', marginBottom: '32px' }}>
-        <form onSubmit={handleSearch} style={{ display: 'flex', gap: '12px' }}>
-          <div style={{ flex: 1, position: 'relative' }}>
-            <input 
-              type="text" 
-              className="bento-input" 
-              placeholder="Enter Tracking Number or Order ID (e.g. STR-FED-..., UUID)..." 
-              value={query} 
-              onChange={e => setQuery(e.target.value)}
-              style={{ width: '100%', paddingLeft: '44px' }}
-            />
-            <Search size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
-          </div>
-          <button type="submit" className="bento-btn" style={{ padding: '0 28px', height: '52px' }} disabled={loading}>
-            {loading ? 'Locating...' : 'Track'}
-          </button>
-        </form>
+      {/* Tracking Input Search Hero */}
+      <div style={{ maxWidth: '1000px', margin: '0 auto 28px' }}>
+        <div className="glass-card" style={{ padding: '24px 32px' }}>
+          <form onSubmit={handleSearch} style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <div style={{ position: 'relative', flex: 1 }}>
+              <Search size={18} style={{ position: 'absolute', left: '16px', top: '15px', color: 'var(--text-dim)' }} />
+              <input 
+                type="text" 
+                className="form-input" 
+                placeholder="Enter Tracking Number (e.g. TRK-...) or Order ID..." 
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                style={{ paddingLeft: '44px', height: '48px', fontSize: '14px' }}
+              />
+            </div>
+            <button type="submit" className="btn-primary" style={{ height: '48px', padding: '0 28px' }} disabled={loading}>
+              {loading ? 'Locating...' : 'Track Package'}
+            </button>
+          </form>
+        </div>
       </div>
 
-      {/* Error Message */}
       {error && (
-        <div className="bento-box animate-fade-in" style={{ maxWidth: '1000px', width: '100%', padding: '24px', background: '#FEE2E2', border: '1px solid #F87171', color: '#991B1B', marginBottom: '32px', textAlign: 'center', fontWeight: 600 }}>
+        <div style={{ maxWidth: '1000px', margin: '0 auto 24px', padding: '16px', borderRadius: '12px', background: 'rgba(244, 63, 94, 0.15)', border: '1px solid rgba(244, 63, 94, 0.3)', color: '#FB7185', fontSize: '13px', fontWeight: 600 }}>
           {error}
         </div>
       )}
 
       {/* Tracking Details View */}
       {data && (
-        <div className="bento-box animate-fade-in" style={{ maxWidth: '1000px', width: '100%', padding: '36px', display: 'flex', flexDirection: 'column', gap: '32px' }}>
+        <div style={{ maxWidth: '1000px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
           
-          {/* Header Summary */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px', borderBottom: '1px solid rgba(0,0,0,0.06)', paddingBottom: '24px' }}>
-            <div>
-              <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tracking Number</div>
-              <h2 style={{ fontSize: '26px', fontFamily: 'monospace', fontWeight: 800, margin: '4px 0' }}>{data.trackingNumber}</h2>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: 'var(--text-secondary)' }}>
-                <Truck size={16} color="var(--neon-orange)" /> Carrier: <strong>{data.carrier}</strong>
-              </div>
-            </div>
-            
-            <div style={{ textAlign: 'right' }}>
-              {(() => {
-                const badge = getStatusColor(data.status);
-                return (
-                  <span style={{ display: 'inline-block', padding: '8px 18px', borderRadius: '20px', background: badge.bg, color: badge.text, fontWeight: 800, fontSize: '13px', letterSpacing: '0.05em' }}>
-                    {badge.label}
-                  </span>
-                );
-              })()}
-              <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '6px' }}>
-                Order ID: {data.orderId.substring(0, 8)}...
-              </div>
-            </div>
-          </div>
-
-          {/* Route Metrics Row */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
-            <div style={{ padding: '16px', background: 'rgba(0,0,0,0.02)', borderRadius: '14px' }}>
-              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 600 }}>ORIGIN NODE</div>
-              <div style={{ fontSize: '16px', fontWeight: 700, marginTop: '4px' }}>{data.originWarehouse}</div>
-              <div style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>{data.originAddress}</div>
-            </div>
-
-            <div style={{ padding: '16px', background: 'rgba(0,0,0,0.02)', borderRadius: '14px' }}>
-              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 600 }}>DESTINATION</div>
-              <div style={{ fontSize: '16px', fontWeight: 700, marginTop: '4px' }}>{data.customerName}</div>
-              <div style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>{data.destinationAddress}</div>
-            </div>
-
-            <div style={{ padding: '16px', background: 'rgba(0,0,0,0.02)', borderRadius: '14px' }}>
-              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 600 }}>PACKAGE CONTENTS</div>
-              <div style={{ fontSize: '16px', fontWeight: 700, marginTop: '4px' }}>{data.itemCount} Units</div>
-              <div style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>{data.transportMode || 'Standard Freight'}</div>
-            </div>
-
-            <div style={{ padding: '16px', background: '#ECFDF5', borderRadius: '14px', border: '1px solid #A7F3D0' }}>
-              <div style={{ fontSize: '12px', color: '#065F46', fontWeight: 700 }}>🌱 ESG CARBON METRIC</div>
-              <div style={{ fontSize: '16px', fontWeight: 800, marginTop: '4px', color: '#047857' }}>
-                {data.carbonKg || '0.12'} kg CO₂e
-              </div>
-              <div style={{ fontSize: '12px', color: '#059669', fontWeight: 600 }}>100% Certified Offset</div>
-            </div>
-          </div>
-
-          {/* Milestone Timeline */}
-          <div>
-            <h3 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '20px' }}>Shipment Progress</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', position: 'relative', paddingLeft: '24px', borderLeft: '2px solid rgba(255, 81, 47, 0.2)', marginLeft: '12px' }}>
-              {data.milestones.map((m, idx) => (
-                <div key={idx} style={{ position: 'relative' }}>
-                  <div style={{ 
-                    position: 'absolute', left: '-31px', top: '2px', width: '14px', height: '14px', 
-                    borderRadius: '50%', background: m.completed ? 'var(--neon-orange)' : '#E5E7EB',
-                    boxShadow: m.completed ? '0 0 10px rgba(255, 81, 47, 0.5)' : 'none'
-                  }} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ fontWeight: 700, fontSize: '15px', color: m.completed ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>
-                      {m.title}
-                    </div>
-                    {m.timestamp && (
-                      <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', fontFamily: 'monospace' }}>
-                        {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ fontSize: '13px', color: m.completed ? 'var(--text-secondary)' : 'var(--text-tertiary)', marginTop: '2px' }}>
-                    {m.description}
-                  </div>
+          {/* Main Shipment Status Card */}
+          <div className="glass-card animate-fade-in" style={{ padding: '32px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px', marginBottom: '24px', paddingBottom: '24px', borderBottom: '1px solid var(--border-subtle)' }}>
+              <div>
+                <div style={{ fontSize: '12px', color: 'var(--text-dim)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  TRACKING IDENTIFIER
                 </div>
-              ))}
+                <h2 className="mono" style={{ fontSize: '28px', color: '#818CF8', margin: '4px 0 2px', letterSpacing: '0.02em' }}>
+                  {data.trackingNumber}
+                </h2>
+                <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                  Carrier: <strong>{data.carrier}</strong> • {data.transportMode || 'Standard Ground Fleet'}
+                </div>
+              </div>
+
+              <div style={{ textAlign: 'right' }}>
+                {(() => {
+                  const badge = getStatusBadge(data.status);
+                  return (
+                    <span className={`status-badge ${badge.class}`} style={{ fontSize: '13px', padding: '6px 16px' }}>
+                      {badge.label}
+                    </span>
+                  );
+                })()}
+                <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '6px' }}>
+                  Order: {data.orderId.substring(0, 8)}...
+                </div>
+              </div>
             </div>
+
+            {/* Metrics Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '32px' }}>
+              <div style={{ padding: '16px', background: 'var(--bg-surface)', borderRadius: '12px', border: '1px solid var(--border-subtle)' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: 700 }}>ORIGIN FULFILLMENT HUB</div>
+                <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-main)', marginTop: '4px' }}>{data.originWarehouse}</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{data.originAddress}</div>
+              </div>
+
+              <div style={{ padding: '16px', background: 'var(--bg-surface)', borderRadius: '12px', border: '1px solid var(--border-subtle)' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: 700 }}>DESTINATION ADDRESS</div>
+                <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-main)', marginTop: '4px' }}>{data.customerName}</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{data.destinationAddress}</div>
+              </div>
+
+              <div style={{ padding: '16px', background: 'var(--bg-surface)', borderRadius: '12px', border: '1px solid var(--border-subtle)' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: 700 }}>PARCEL CONTENTS</div>
+                <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-main)', marginTop: '4px' }}>{data.itemCount} Units</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Standard Insured Freight</div>
+              </div>
+
+              <div style={{ padding: '16px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '12px', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+                <div style={{ fontSize: '11px', color: '#34D399', fontWeight: 700 }}>🌱 SCOPE-3 ESG CARBON</div>
+                <div style={{ fontSize: '15px', fontWeight: 800, color: '#34D399', marginTop: '4px' }}>
+                  {data.carbonKg || '0.12'} kg CO₂e
+                </div>
+                <div style={{ fontSize: '11px', color: '#10B981', fontWeight: 600 }}>100% Certified Offset</div>
+              </div>
+            </div>
+
+            {/* Shipment Milestones Timeline */}
+            <div>
+              <h3 style={{ fontSize: '16px', margin: '0 0 20px', color: 'var(--text-main)' }}>Shipment Journey Milestones</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', position: 'relative', paddingLeft: '24px', borderLeft: '2px solid rgba(99, 102, 241, 0.3)', marginLeft: '10px' }}>
+                {data.milestones.map((m, idx) => (
+                  <div key={idx} style={{ position: 'relative' }}>
+                    <div style={{ 
+                      position: 'absolute', left: '-31px', top: '2px', width: '12px', height: '12px', 
+                      borderRadius: '50%', background: m.completed ? '#6366F1' : 'var(--bg-surface)',
+                      border: m.completed ? '2px solid #818CF8' : '2px solid var(--border-subtle)',
+                      boxShadow: m.completed ? '0 0 10px rgba(99, 102, 241, 0.6)' : 'none'
+                    }} />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ fontWeight: 700, fontSize: '14px', color: m.completed ? 'var(--text-main)' : 'var(--text-dim)' }}>
+                        {m.title}
+                      </div>
+                      {m.timestamp && (
+                        <div style={{ fontSize: '11px', color: 'var(--text-dim)', fontFamily: 'monospace' }}>
+                          {new Date(m.timestamp).toLocaleString()}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ fontSize: '12px', color: m.completed ? 'var(--text-muted)' : 'var(--text-dim)', marginTop: '2px' }}>
+                      {m.description}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
           </div>
 
-          {/* Mini Route Map */}
-          <div style={{ height: '300px', borderRadius: '18px', overflow: 'hidden', border: '1px solid rgba(0,0,0,0.06)' }}>
+          {/* Interactive Route Journey Map */}
+          <div className="glass-card" style={{ padding: '24px', height: '360px', position: 'relative' }}>
             <MapContainer 
-              bounds={[[data.originLat, data.originLng], [data.destLat, data.destLng]]} 
-              boundsOptions={{ padding: [50, 50] }}
-              style={{ width: '100%', height: '100%' }}
+              center={[(data.originLat + data.destLat) / 2, (data.originLng + data.destLng) / 2]} 
+              zoom={4} 
+              style={{ width: '100%', height: '100%', borderRadius: '14px' }} 
               zoomControl={false}
             >
-              <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
+              <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
               
               {/* Origin Marker */}
-              <CircleMarker center={[data.originLat, data.originLng]} radius={9} pathOptions={{ color: '#ff512f', fillColor: '#ff512f', fillOpacity: 0.9 }}>
+              <CircleMarker center={[data.originLat, data.originLng]} radius={10} pathOptions={{ color: '#6366F1', fillColor: '#818CF8', fillOpacity: 0.9 }}>
                 <Popup><strong>Origin:</strong> {data.originWarehouse}</Popup>
               </CircleMarker>
 
               {/* Destination Marker */}
-              <CircleMarker center={[data.destLat, data.destLng]} radius={9} pathOptions={{ color: '#10b981', fillColor: '#10b981', fillOpacity: 0.9 }}>
+              <CircleMarker center={[data.destLat, data.destLng]} radius={10} pathOptions={{ color: '#10B981', fillColor: '#34D399', fillOpacity: 0.9 }}>
                 <Popup><strong>Destination:</strong> {data.customerName}</Popup>
               </CircleMarker>
 
-              {/* Route Polyline */}
+              {/* Line */}
               <Polyline 
                 positions={[[data.originLat, data.originLng], [data.destLat, data.destLng]]} 
-                pathOptions={{ color: 'var(--neon-orange)', weight: 3, dashArray: '8, 8' }} 
+                pathOptions={{ color: '#6366F1', weight: 4, dashArray: '6, 8' }} 
               />
             </MapContainer>
-          </div>
-
-          {/* Footer Actions */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '16px', borderTop: '1px solid rgba(0,0,0,0.06)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-              <ShieldCheck size={18} color="#10B981" /> Verified STRIDE Cryptographic Manifest
-            </div>
-            <a 
-              href={`/api/v1/orders/${data.orderId}/label`} 
-              target="_blank" 
-              rel="noreferrer"
-              className="bento-btn-secondary" 
-              style={{ padding: '10px 20px', borderRadius: '12px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 700 }}
-            >
-              <FileText size={16} /> Thermal Shipping Label (PDF)
-            </a>
           </div>
 
         </div>

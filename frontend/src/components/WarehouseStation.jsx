@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
-  Building2, Scan, CheckCircle, PackageCheck, Truck, 
-  FileText, ArrowLeft, RefreshCw, Barcode, AlertCircle, ArrowRightLeft, X 
+  Building2, Scan, CheckCircle2, PackageCheck, Truck, 
+  FileText, RefreshCw, Barcode, AlertCircle, ArrowRightLeft, X, Layers 
 } from 'lucide-react';
+import AppLayout from './AppLayout';
 
 export default function WarehouseStation({ token, setAuth }) {
   const navigate = useNavigate();
@@ -108,7 +109,7 @@ export default function WarehouseStation({ token, setAuth }) {
       });
       if (!res.ok) throw new Error('Pick operation failed');
       
-      setScanMessage({ type: 'success', text: `Allocation ${allocationId.substring(0, 8)} marked PICKED!` });
+      setScanMessage({ type: 'success', text: `Allocation #${allocationId.substring(0, 8)} verified and marked PICKED!` });
       await fetchStationData();
     } catch (err) {
       setScanMessage({ type: 'error', text: err.message });
@@ -126,10 +127,10 @@ export default function WarehouseStation({ token, setAuth }) {
       });
       if (!res.ok) throw new Error('Ship operation failed');
 
-      // Auto-trigger PDF label download/print
+      // Auto-open PDF shipping label in background tab
       window.open(`/api/v1/orders/${orderId}/allocations/${allocationId}/label`, '_blank');
       
-      setScanMessage({ type: 'success', text: `Allocation shipped & 4x6 label generated!` });
+      setScanMessage({ type: 'success', text: `Allocation dispatched into carrier transit & 4x6 label generated!` });
       await fetchStationData();
     } catch (err) {
       setScanMessage({ type: 'error', text: err.message });
@@ -191,7 +192,6 @@ export default function WarehouseStation({ token, setAuth }) {
     const barcode = scanInput.trim().toUpperCase();
     if (!barcode) return;
 
-    // Search matching allocation by ID prefix or tracking prefix
     const match = activeAllocations.find(a => 
       a.allocationId.toUpperCase().startsWith(barcode) || 
       a.orderId.toUpperCase().startsWith(barcode) ||
@@ -207,7 +207,7 @@ export default function WarehouseStation({ token, setAuth }) {
         setScanMessage({ type: 'info', text: `Item is already ${match.status}` });
       }
     } else {
-      setScanMessage({ type: 'error', text: `No active allocation found for barcode: ${barcode}` });
+      setScanMessage({ type: 'error', text: `No active allocation found matching barcode: ${barcode}` });
     }
     setScanInput('');
   };
@@ -221,166 +221,165 @@ export default function WarehouseStation({ token, setAuth }) {
     t.sourceWarehouseId === selectedWarehouseId || t.targetWarehouseId === selectedWarehouseId
   );
 
-  if (loading && warehouses.length === 0) {
-    return <div style={{ padding: '40px', fontSize: '24px', fontWeight: 'bold' }}>Connecting to Warehouse Station...</div>;
-  }
-
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-color)', padding: '40px 24px' }}>
+    <AppLayout token={token} setAuth={setAuth}>
       
-      {/* Top Bar */}
-      <div style={{ maxWidth: '1400px', margin: '0 auto 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <button onClick={() => navigate('/dashboard')} className="bento-btn-secondary" style={{ padding: '12px', borderRadius: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-            <ArrowLeft size={20} />
-          </button>
-          <div>
-            <h1 style={{ fontSize: '28px', fontWeight: 800, letterSpacing: '-0.02em', margin: 0 }}>Warehouse Pick & Pack Terminal</h1>
-            <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary)' }}>Floor Station: <strong>{selectedWarehouse?.name || 'All Nodes'}</strong></p>
-          </div>
+      {/* Top Header */}
+      <div className="app-header">
+        <div>
+          <h1 style={{ fontSize: '20px', margin: 0, fontWeight: 800 }}>Warehouse Floor Terminal</h1>
+          <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>
+            Active Station: <strong style={{ color: '#818CF8' }}>{selectedWarehouse?.name || 'All Nodes'}</strong>
+          </p>
         </div>
 
-        {/* Actions & Node Switcher */}
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+        {/* Node Switcher & Actions */}
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <button 
             onClick={() => setShowTransferModal(true)} 
-            className="bento-btn" 
-            style={{ padding: '10px 18px', borderRadius: '14px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', background: 'linear-gradient(135deg, #8B5CF6, #6D28D9)' }}
+            className="btn-primary" 
+            style={{ padding: '8px 16px', fontSize: '13px', background: 'linear-gradient(135deg, #8B5CF6, #6D28D9)' }}
           >
-            <ArrowRightLeft size={16} /> Inter-Hub Transfer
+            <ArrowRightLeft size={15} /> Transfer Stock
           </button>
-          {warehouses.map(wh => (
-            <button
-              key={wh.id}
-              onClick={() => setSelectedWarehouseId(wh.id)}
-              className={selectedWarehouseId === wh.id ? 'bento-btn' : 'bento-btn-secondary'}
-              style={{ padding: '10px 18px', borderRadius: '14px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
-            >
-              {wh.name}
-            </button>
-          ))}
+          
+          <div style={{ display: 'flex', background: 'var(--bg-surface)', padding: '3px', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
+            {warehouses.map(wh => (
+              <button
+                key={wh.id}
+                onClick={() => setSelectedWarehouseId(wh.id)}
+                style={{
+                  padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', border: 'none',
+                  background: selectedWarehouseId === wh.id ? 'var(--brand-primary)' : 'transparent',
+                  color: selectedWarehouseId === wh.id ? 'white' : 'var(--text-muted)'
+                }}
+              >
+                {wh.name}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '28px' }}>
+      {/* Terminal Body */}
+      <div style={{ padding: '32px', maxWidth: '1400px', margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: '24px' }}>
         
-        {/* Metric Cards Banner */}
+        {/* KPI Counter Row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
-          <div className="bento-box" style={{ padding: '24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{ background: '#FEF3C7', color: '#92400E', padding: '14px', borderRadius: '16px' }}>
-              <PackageCheck size={28} />
+          <div className="glass-card" style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#FBBF24', padding: '14px', borderRadius: '14px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+              <PackageCheck size={26} />
             </div>
             <div>
-              <div style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase' }}>To Pick</div>
-              <div style={{ fontSize: '32px', fontWeight: 800, color: 'var(--text-primary)' }}>{pendingPickCount}</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: 700, textTransform: 'uppercase' }}>Queued to Pick</div>
+              <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--text-main)' }}>{pendingPickCount}</div>
             </div>
           </div>
 
-          <div className="bento-box" style={{ padding: '24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{ background: '#DBEAFE', color: '#1E40AF', padding: '14px', borderRadius: '16px' }}>
-              <Scan size={28} />
+          <div className="glass-card" style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38BDF8', padding: '14px', borderRadius: '14px', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
+              <Scan size={26} />
             </div>
             <div>
-              <div style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase' }}>Ready To Ship</div>
-              <div style={{ fontSize: '32px', fontWeight: 800, color: 'var(--text-primary)' }}>{readyToShipCount}</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: 700, textTransform: 'uppercase' }}>Ready to Pack & Ship</div>
+              <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--text-main)' }}>{readyToShipCount}</div>
             </div>
           </div>
 
-          <div className="bento-box" style={{ padding: '24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{ background: '#D1FAE5', color: '#065F46', padding: '14px', borderRadius: '16px' }}>
-              <Truck size={28} />
+          <div className="glass-card" style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#34D399', padding: '14px', borderRadius: '14px', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+              <Truck size={26} />
             </div>
             <div>
-              <div style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase' }}>Dispatched</div>
-              <div style={{ fontSize: '32px', fontWeight: 800, color: 'var(--text-primary)' }}>{shippedCount}</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: 700, textTransform: 'uppercase' }}>Carrier Dispatched</div>
+              <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--text-main)' }}>{shippedCount}</div>
             </div>
           </div>
         </div>
 
-        {/* Barcode Scanner Bar */}
-        <div className="bento-box" style={{ padding: '24px', background: 'white' }}>
+        {/* Laser / USB Barcode Scanner Bar */}
+        <div className="glass-card" style={{ padding: '20px 24px' }}>
           <form onSubmit={handleBarcodeScan} style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            <div style={{ background: 'var(--neon-orange)', color: 'white', padding: '12px', borderRadius: '12px' }}>
-              <Barcode size={24} />
+            <div style={{ background: 'linear-gradient(135deg, #6366F1, #4F46E5)', color: 'white', padding: '12px', borderRadius: '10px' }}>
+              <Barcode size={22} />
             </div>
             <div style={{ flex: 1 }}>
               <input 
                 ref={scanInputRef}
                 type="text" 
-                className="bento-input" 
-                placeholder="Scan or type Barcode / Allocation ID to auto-pick or pack..." 
+                className="form-input" 
+                placeholder="Scan or type Barcode / Allocation ID to auto-verify..." 
                 value={scanInput}
                 onChange={e => setScanInput(e.target.value)}
-                style={{ width: '100%', height: '52px', fontSize: '15px' }}
+                style={{ height: '48px', fontSize: '14px' }}
                 autoFocus
               />
             </div>
-            <button type="submit" className="bento-btn" style={{ height: '52px', padding: '0 28px' }}>
+            <button type="submit" className="btn-primary" style={{ height: '48px', padding: '0 24px' }}>
               Process Scan
             </button>
           </form>
 
           {scanMessage && (
             <div style={{ 
-              marginTop: '14px', padding: '12px 18px', borderRadius: '12px', fontSize: '14px', fontWeight: 700,
-              background: scanMessage.type === 'success' ? '#D1FAE5' : scanMessage.type === 'error' ? '#FEE2E2' : '#EFF6FF',
-              color: scanMessage.type === 'success' ? '#065F46' : scanMessage.type === 'error' ? '#991B1B' : '#1E40AF'
+              marginTop: '12px', padding: '10px 16px', borderRadius: '10px', fontSize: '13px', fontWeight: 700,
+              background: scanMessage.type === 'success' ? 'rgba(16, 185, 129, 0.15)' : scanMessage.type === 'error' ? 'rgba(244, 63, 94, 0.15)' : 'rgba(99, 102, 241, 0.15)',
+              color: scanMessage.type === 'success' ? '#34D399' : scanMessage.type === 'error' ? '#FB7185' : '#818CF8',
+              border: scanMessage.type === 'success' ? '1px solid rgba(16, 185, 129, 0.3)' : scanMessage.type === 'error' ? '1px solid rgba(244, 63, 94, 0.3)' : '1px solid rgba(99, 102, 241, 0.3)'
             }}>
               {scanMessage.text}
             </div>
           )}
         </div>
 
-        {/* Live Pick & Pack Queue */}
-        <div className="bento-box" style={{ padding: '32px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-            <h3 style={{ fontSize: '20px', fontWeight: 800, margin: 0 }}>Active Pick & Dispatch Queue</h3>
-            <button onClick={fetchStationData} className="bento-btn-secondary" style={{ padding: '8px 16px', borderRadius: '10px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-              <RefreshCw size={14} /> Refresh
+        {/* Live Pick & Pack Work Queue */}
+        <div className="glass-card" style={{ padding: '28px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h3 style={{ fontSize: '17px', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Layers size={18} color="#818CF8" /> Live Pick & Dispatch Queue
+            </h3>
+            <button onClick={fetchStationData} className="btn-secondary" style={{ padding: '6px 12px', fontSize: '12px' }}>
+              <RefreshCw size={13} /> Refresh
             </button>
           </div>
 
           {activeAllocations.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-tertiary)' }}>
-              No active allocations queued for this fulfillment node.
+            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-dim)' }}>
+              No active pick orders queued for {selectedWarehouse?.name || 'this node'}.
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {activeAllocations.map(item => (
                 <div key={item.allocationId} style={{ 
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
-                  padding: '18px 24px', background: 'rgba(0,0,0,0.02)', borderRadius: '16px', 
-                  border: item.status === 'ALLOCATED' ? '1px solid rgba(255, 81, 47, 0.3)' : '1px solid transparent'
+                  padding: '16px 20px', background: 'var(--bg-surface)', borderRadius: '12px', 
+                  border: item.status === 'ALLOCATED' ? '1px solid rgba(99, 102, 241, 0.3)' : '1px solid var(--border-subtle)'
                 }}>
                   
                   {/* Item Details */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                    <div style={{ 
-                      padding: '8px 14px', borderRadius: '12px', fontFamily: 'monospace', fontWeight: 800, fontSize: '13px',
-                      background: item.status === 'SHIPPED' ? '#D1FAE5' : item.status === 'PICKED' ? '#DBEAFE' : '#FEF3C7',
-                      color: item.status === 'SHIPPED' ? '#065F46' : item.status === 'PICKED' ? '#1E40AF' : '#92400E'
-                    }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <span className={`status-badge ${item.status === 'SHIPPED' ? 'badge-green' : item.status === 'PICKED' ? 'badge-blue' : 'badge-amber'}`}>
                       {item.status}
-                    </div>
+                    </span>
 
                     <div>
-                      <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                        <span style={{ color: 'var(--neon-orange)' }}>{item.quantity}x</span> {item.productName}
+                      <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-main)' }}>
+                        <span style={{ color: '#818CF8' }}>{item.quantity}x</span> {item.productName}
                       </div>
-                      <div style={{ fontSize: '13px', color: 'var(--text-tertiary)', marginTop: '4px', fontFamily: 'monospace' }}>
+                      <div style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '2px', fontFamily: 'monospace' }}>
                         ALLOC: {item.allocationId.substring(0, 8)} • ORDER: {item.orderId.substring(0, 8)}
                       </div>
                     </div>
                   </div>
 
-                  {/* Action Controls */}
-                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  {/* Actions */}
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     {item.status === 'ALLOCATED' && (
                       <button 
                         onClick={() => handlePick(item.orderId, item.allocationId)}
                         disabled={actionLoading[item.allocationId]}
-                        className="bento-btn" 
-                        style={{ padding: '10px 20px', borderRadius: '12px', fontSize: '13px' }}
+                        className="btn-primary" 
+                        style={{ padding: '8px 16px', fontSize: '13px' }}
                       >
                         {actionLoading[item.allocationId] ? 'Picking...' : '✓ Pick Item'}
                       </button>
@@ -390,8 +389,8 @@ export default function WarehouseStation({ token, setAuth }) {
                       <button 
                         onClick={() => handleShipAndPrint(item.orderId, item.allocationId)}
                         disabled={actionLoading[item.allocationId]}
-                        className="bento-btn" 
-                        style={{ background: 'linear-gradient(135deg, #10B981, #059669)', padding: '10px 20px', borderRadius: '12px', fontSize: '13px' }}
+                        className="btn-primary" 
+                        style={{ background: 'linear-gradient(135deg, #10B981, #059669)', padding: '8px 16px', fontSize: '13px' }}
                       >
                         {actionLoading[item.allocationId] ? 'Dispatching...' : '📦 Pack & Ship + Print'}
                       </button>
@@ -402,20 +401,20 @@ export default function WarehouseStation({ token, setAuth }) {
                         href={`/api/v1/orders/${item.orderId}/allocations/${item.allocationId}/label`}
                         target="_blank"
                         rel="noreferrer"
-                        className="bento-btn-secondary"
-                        style={{ padding: '10px 18px', borderRadius: '12px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', textDecoration: 'none', fontWeight: 700 }}
+                        className="btn-secondary"
+                        style={{ padding: '8px 14px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
                       >
-                        <FileText size={15} /> Reprint 4x6 Label
+                        <FileText size={14} /> Reprint Label
                       </a>
                     )}
 
                     <Link 
                       to={`/track/${item.orderId}`}
-                      className="bento-btn-secondary"
-                      style={{ padding: '10px 14px', borderRadius: '12px', fontSize: '13px', textDecoration: 'none', display: 'flex', alignItems: 'center' }}
-                      title="View Public Tracking"
+                      className="btn-secondary"
+                      style={{ padding: '8px 12px', fontSize: '12px' }}
+                      title="Public Customer Tracker"
                     >
-                      <Truck size={16} />
+                      <Truck size={14} />
                     </Link>
                   </div>
 
@@ -426,25 +425,25 @@ export default function WarehouseStation({ token, setAuth }) {
         </div>
 
         {/* Inter-Warehouse Cross-Dock Transfers Queue */}
-        <div className="bento-box" style={{ padding: '32px' }}>
-          <h3 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <ArrowRightLeft size={20} color="#8B5CF6" /> Inter-Hub Stock Transfers
+        <div className="glass-card" style={{ padding: '28px' }}>
+          <h3 style={{ fontSize: '17px', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ArrowRightLeft size={18} color="#C084FC" /> Inter-Hub Stock Transfers
           </h3>
 
           {relevantTransfers.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-tertiary)' }}>
-              No active stock transfers associated with this node.
+            <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-dim)' }}>
+              No active cross-dock transfers for this fulfillment node.
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {relevantTransfers.map(trf => (
-                <div key={trf.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', background: 'rgba(139, 92, 246, 0.05)', borderRadius: '14px', border: '1px solid rgba(139, 92, 246, 0.2)' }}>
+                <div key={trf.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', background: 'var(--bg-surface)', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: '15px' }}>
-                      <span style={{ color: '#8B5CF6' }}>{trf.quantity}x</span> {trf.productName} ({trf.sku})
+                    <div style={{ fontWeight: 700, fontSize: '14px' }}>
+                      <span style={{ color: '#C084FC' }}>{trf.quantity}x</span> {trf.productName} ({trf.sku})
                     </div>
-                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                      From: <strong>{trf.sourceWarehouseName}</strong> ➔ To: <strong>{trf.targetWarehouseName}</strong> • Ref: <span style={{ fontFamily: 'monospace' }}>{trf.trackingRef}</span>
+                    <div style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '2px' }}>
+                      From: <strong>{trf.sourceWarehouseName}</strong> ➔ To: <strong>{trf.targetWarehouseName}</strong> • Ref: <span className="mono">{trf.trackingRef}</span>
                     </div>
                   </div>
 
@@ -453,13 +452,13 @@ export default function WarehouseStation({ token, setAuth }) {
                       <button 
                         onClick={() => handleCompleteTransfer(trf.id)}
                         disabled={actionLoading[trf.id]}
-                        className="bento-btn" 
-                        style={{ padding: '8px 18px', borderRadius: '10px', fontSize: '13px', background: 'linear-gradient(135deg, #10B981, #059669)' }}
+                        className="btn-primary" 
+                        style={{ padding: '8px 16px', fontSize: '12px', background: 'linear-gradient(135deg, #10B981, #059669)' }}
                       >
-                        {actionLoading[trf.id] ? 'Receiving...' : '✓ Receive & Ingest Stock'}
+                        {actionLoading[trf.id] ? 'Ingesting...' : '✓ Ingest Stock'}
                       </button>
                     ) : (
-                      <span style={{ padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 800, background: trf.status === 'COMPLETED' ? '#D1FAE5' : '#EDE9FE', color: trf.status === 'COMPLETED' ? '#065F46' : '#6D28D9' }}>
+                      <span className={`status-badge ${trf.status === 'COMPLETED' ? 'badge-green' : 'badge-purple'}`}>
                         {trf.status}
                       </span>
                     )}
@@ -474,27 +473,27 @@ export default function WarehouseStation({ token, setAuth }) {
 
       {/* Transfer Stock Modal */}
       {showTransferModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-          <div className="bento-box animate-fade-in" style={{ width: '100%', maxWidth: '500px', padding: '32px', background: 'white' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-              <h2 style={{ fontSize: '22px', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <ArrowRightLeft size={22} color="#8B5CF6" /> Initiate Inter-Hub Transfer
-              </h2>
-              <button onClick={() => setShowTransferModal(false)} className="bento-btn-secondary" style={{ padding: '6px', borderRadius: '8px', cursor: 'pointer' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div className="glass-card animate-fade-in" style={{ width: '100%', maxWidth: '480px', padding: '32px', background: 'var(--bg-surface-elevated)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ fontSize: '18px', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ArrowRightLeft size={18} color="#C084FC" /> Initiate Inter-Hub Transfer
+              </h3>
+              <button onClick={() => setShowTransferModal(false)} className="btn-secondary" style={{ padding: '6px' }}>
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleInitiateTransfer} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            <form onSubmit={handleInitiateTransfer} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div>
-                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>SOURCE HUB (CURRENT)</label>
-                <input type="text" className="bento-input" value={selectedWarehouse?.name || ''} disabled style={{ width: '100%', background: '#F3F4F6' }} />
+                <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase' }}>SOURCE HUB</label>
+                <input type="text" className="form-input" value={selectedWarehouse?.name || ''} disabled style={{ opacity: 0.6 }} />
               </div>
 
               <div>
-                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>DESTINATION HUB</label>
-                <select className="bento-input" style={{ width: '100%' }} value={transferTargetId} onChange={e => setTransferTargetId(e.target.value)} required>
-                  <option value="">Select Destination Warehouse...</option>
+                <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase' }}>DESTINATION HUB</label>
+                <select className="form-select" value={transferTargetId} onChange={e => setTransferTargetId(e.target.value)} required>
+                  <option value="">Select Destination...</option>
                   {warehouses.filter(w => w.id !== selectedWarehouseId).map(w => (
                     <option key={w.id} value={w.id}>{w.name}</option>
                   ))}
@@ -502,8 +501,8 @@ export default function WarehouseStation({ token, setAuth }) {
               </div>
 
               <div>
-                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>PRODUCT</label>
-                <select className="bento-input" style={{ width: '100%' }} value={transferProductId} onChange={e => setTransferProductId(e.target.value)} required>
+                <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase' }}>SKU ITEM</label>
+                <select className="form-select" value={transferProductId} onChange={e => setTransferProductId(e.target.value)} required>
                   {products.map(p => (
                     <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>
                   ))}
@@ -511,15 +510,15 @@ export default function WarehouseStation({ token, setAuth }) {
               </div>
 
               <div>
-                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>TRANSFER QUANTITY</label>
-                <input type="number" className="bento-input" min="1" max="500" value={transferQty} onChange={e => setTransferQty(e.target.value)} style={{ width: '100%' }} required />
+                <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase' }}>TRANSFER QUANTITY</label>
+                <input type="number" className="form-input" min="1" max="500" value={transferQty} onChange={e => setTransferQty(e.target.value)} required />
               </div>
 
-              <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
-                <button type="submit" className="bento-btn" style={{ flex: 1, padding: '14px', background: 'linear-gradient(135deg, #8B5CF6, #6D28D9)' }}>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                <button type="submit" className="btn-primary" style={{ flex: 1, background: 'linear-gradient(135deg, #8B5CF6, #6D28D9)' }}>
                   Dispatch Transfer
                 </button>
-                <button type="button" onClick={() => setShowTransferModal(false)} className="bento-btn-secondary" style={{ padding: '14px 20px' }}>
+                <button type="button" onClick={() => setShowTransferModal(false)} className="btn-secondary">
                   Cancel
                 </button>
               </div>
@@ -528,6 +527,6 @@ export default function WarehouseStation({ token, setAuth }) {
         </div>
       )}
 
-    </div>
+    </AppLayout>
   );
 }
