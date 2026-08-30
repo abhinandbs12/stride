@@ -1,223 +1,154 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { 
-  Key, Plus, Copy, Check, Trash2, Shield, Code, Terminal, ExternalLink, RefreshCw 
-} from 'lucide-react';
+import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Key, Plus, Trash2, Copy, Check, RefreshCw, Shield } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import AppLayout from './AppLayout';
+import { cn } from '@/lib/utils';
 
 export default function DeveloperPortal({ token, setAuth }) {
   const navigate = useNavigate();
   const [keys, setKeys] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [keyName, setKeyName] = useState('');
-  const [newKeyResult, setNewKeyResult] = useState(null);
-  const [copied, setCopied] = useState(false);
+  const [newKeyName, setNewKeyName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [newKey, setNewKey] = useState(null);
+  const [copied, setCopied] = useState('');
 
-  const fetchKeys = async () => {
+  const headers = { Authorization: `Bearer ${token}` };
+
+  const fetchKeys = useCallback(async () => {
     try {
-      const res = await fetch('/api/v1/developer/keys', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.status === 401) {
-        setAuth(null);
-        navigate('/login');
-        return;
-      }
+      const res = await fetch('/api/v1/developer/keys', { headers });
+      if (!res.ok) { setAuth(null); navigate('/login'); return; }
       const data = await res.json();
       setKeys(Array.isArray(data) ? data : []);
-      setLoading(false);
-    } catch (err) {
-      console.error(err);
-      setLoading(false);
-    }
-  };
+    } catch (e) { console.error(e); }
+    setLoading(false);
+  }, [token]);
 
   useEffect(() => {
-    if (!token) {
-      navigate('/login');
-      return;
-    }
+    if (!token) { navigate('/login'); return; }
     fetchKeys();
-  }, [token, navigate, setAuth]);
+  }, [token]);
 
-  const handleCreateKey = async (e) => {
-    e.preventDefault();
-    if (!keyName.trim()) return;
+  const handleCreate = async () => {
+    if (!newKeyName.trim()) return;
     setCreating(true);
     try {
       const res = await fetch('/api/v1/developer/keys', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ name: keyName.trim(), role: 'ADMIN' })
+        method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newKeyName, role: 'ADMIN' }),
       });
-      if (!res.ok) throw new Error('Failed to generate key');
+      if (!res.ok) throw new Error('Failed to create key');
       const data = await res.json();
-      setNewKeyResult(data);
-      setKeyName('');
-      await fetchKeys();
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setCreating(false);
-    }
+      setNewKey(data);
+      setNewKeyName('');
+      fetchKeys();
+    } catch (e) { alert(e.message); }
+    setCreating(false);
   };
 
-  const handleRevokeKey = async (id) => {
-    if (!window.confirm('Are you sure you want to revoke this API key? External systems using it will lose access immediately.')) return;
+  const handleRevoke = async (id) => {
+    if (!confirm('Revoke this API key? This cannot be undone.')) return;
     try {
-      const res = await fetch(`/api/v1/developer/keys/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error('Revocation failed');
-      await fetchKeys();
-    } catch (err) {
-      alert(err.message);
-    }
+      await fetch(`/api/v1/developer/keys/${id}`, { method: 'DELETE', headers });
+      fetchKeys();
+    } catch (e) { alert(e.message); }
   };
 
-  const handleCopy = (text) => {
+  const copyToClipboard = (text, id) => {
     navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
+    setCopied(id);
+    setTimeout(() => setCopied(''), 2000);
   };
+
+  const apiEndpoints = [
+    { method: 'POST', path: '/api/v1/auth/login', desc: 'Authenticate and get JWT token' },
+    { method: 'GET', path: '/api/v1/warehouses', desc: 'List all active warehouse nodes' },
+    { method: 'GET', path: '/api/v1/products', desc: 'List product catalog' },
+    { method: 'GET', path: '/api/v1/orders', desc: 'List orders with pagination' },
+    { method: 'POST', path: '/api/v1/orders', desc: 'Place order with multi-node routing' },
+    { method: 'POST', path: '/api/v1/orders/:id/allocations/:aid/pick', desc: 'Pick allocation at warehouse' },
+    { method: 'POST', path: '/api/v1/orders/:id/allocations/:aid/ship', desc: 'Ship allocation with label' },
+    { method: 'GET', path: '/api/v1/stock', desc: 'Query stock levels' },
+    { method: 'GET', path: '/api/v1/public/track/:ref', desc: 'Public tracking (no auth)' },
+    { method: 'POST', path: '/api/v1/orders/stress-test', desc: 'Concurrency stress test' },
+  ];
 
   return (
     <AppLayout token={token} setAuth={setAuth}>
-      
-      {/* Top Header */}
-      <div className="app-header">
+
+      <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 style={{ fontSize: '20px', margin: 0, fontWeight: 800 }}>B2B Developer Portal</h1>
-          <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Programmatic API keys, webhook integrations & ERP authentication</p>
+          <h2 className="text-xl font-extrabold text-gray-900">Developer API Portal</h2>
+          <p className="text-xs text-gray-500">API keys, endpoint reference, and integration guides</p>
         </div>
-
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <a href="/swagger-ui.html" target="_blank" rel="noreferrer" className="btn-secondary" style={{ padding: '8px 14px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Code size={14} /> Swagger UI <ExternalLink size={12} />
-          </a>
-          <button onClick={fetchKeys} className="btn-secondary" style={{ padding: '8px 12px', fontSize: '12px' }}>
-            <RefreshCw size={13} />
-          </button>
-        </div>
+        <Button variant="outline" size="sm" onClick={fetchKeys}>
+          <RefreshCw size={13} className={loading ? 'animate-spin' : ''}/> Refresh
+        </Button>
       </div>
 
-      <div style={{ padding: '32px', maxWidth: '1200px', margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        
-        {/* Create API Key Box */}
-        <div className="glass-card" style={{ padding: '28px' }}>
-          <h3 style={{ fontSize: '16px', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Key size={18} color="#818CF8" /> Generate Enterprise Integration Key
-          </h3>
-          <form onSubmit={handleCreateKey} style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            <input 
-              type="text" 
-              className="form-input" 
-              placeholder="Integration Name (e.g. Shopify US Store, SAP ERP Sync, 3PL Partner)..." 
-              value={keyName}
-              onChange={e => setKeyName(e.target.value)}
-              style={{ flex: 1, height: '46px' }}
-              required
-            />
-            <button type="submit" className="btn-primary" style={{ height: '46px', padding: '0 24px', whiteSpace: 'nowrap' }} disabled={creating}>
-              <Plus size={16} /> {creating ? 'Generating...' : 'Generate Key'}
-            </button>
-          </form>
-
-          {/* New Key Revealed Banner */}
-          {newKeyResult && (
-            <div style={{ marginTop: '16px', padding: '16px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '12px' }}>
-              <div style={{ fontSize: '12px', fontWeight: 800, color: '#34D399', marginBottom: '8px' }}>
-                🎉 API Key Generated! Copy it now as it cannot be shown again:
-              </div>
-              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                <input 
-                  type="text" 
-                  readOnly 
-                  value={newKeyResult.plainKey}
-                  style={{ flex: 1, padding: '10px 14px', background: 'var(--bg-surface)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '8px', fontFamily: 'monospace', fontWeight: 700, fontSize: '13px', color: '#34D399' }} 
-                />
-                <button 
-                  type="button" 
-                  onClick={() => handleCopy(newKeyResult.plainKey)} 
-                  className="btn-primary" 
-                  style={{ background: 'linear-gradient(135deg, #10B981, #059669)', padding: '0 16px', height: '42px', fontSize: '13px' }}
-                >
-                  {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copied!' : 'Copy'}
-                </button>
-              </div>
-            </div>
-          )}
+      {/* Create key */}
+      <div className="p-5 rounded-2xl bg-white border border-gray-200 shadow-sm mb-5">
+        <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2"><Key size={15} className="text-[#D22B2B]"/> Generate API Key</h3>
+        <div className="flex gap-2">
+          <input value={newKeyName} onChange={e => setNewKeyName(e.target.value)} placeholder="Key name (e.g. Production Backend)"
+            className="flex-1 h-10 px-3 rounded-xl bg-gray-50 border border-gray-200 text-sm font-medium text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#D22B2B]/15 focus:border-[#D22B2B]"/>
+          <Button onClick={handleCreate} disabled={creating || !newKeyName.trim()}>
+            <Plus size={14}/> {creating ? 'Creating...' : 'Create'}
+          </Button>
         </div>
+        {newKey && (
+          <div className="mt-3 p-3 rounded-xl bg-emerald-50 border border-emerald-200">
+            <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider mb-1">⚠ Copy this key — it won't be shown again</div>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 text-xs font-mono text-emerald-900 bg-emerald-100 px-2 py-1.5 rounded-lg break-all">{newKey.rawKey || newKey.key || JSON.stringify(newKey)}</code>
+              <Button variant="outline" size="icon" onClick={() => copyToClipboard(newKey.rawKey || newKey.key, 'new')}>
+                {copied === 'new' ? <Check size={14} className="text-emerald-600"/> : <Copy size={14}/>}
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
 
-        {/* Active Keys List */}
-        <div className="glass-card" style={{ padding: '28px' }}>
-          <h3 style={{ fontSize: '16px', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Shield size={18} color="#38BDF8" /> Active API Keys
-          </h3>
-
-          {loading ? (
-            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-dim)' }}>Loading API keys...</div>
-          ) : keys.length === 0 ? (
-            <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-dim)' }}>No API keys created yet.</div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {keys.map(k => (
-                <div key={k.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', background: 'var(--bg-surface)', borderRadius: '12px', border: '1px solid var(--border-subtle)' }}>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      {k.name}
-                      <span className={`status-badge ${k.active ? 'badge-green' : 'badge-red'}`} style={{ fontSize: '10px', padding: '2px 8px' }}>
-                        {k.active ? 'ACTIVE' : 'REVOKED'}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '2px', fontFamily: 'monospace' }}>
-                      Prefix: <strong>{k.keyPrefix}</strong> • Role: {k.role} • Created: {new Date(k.createdAt).toLocaleDateString()}
-                    </div>
-                  </div>
-
-                  <div>
-                    {k.active && (
-                      <button 
-                        onClick={() => handleRevokeKey(k.id)}
-                        className="btn-secondary"
-                        style={{ padding: '6px 12px', fontSize: '12px', color: '#FB7185' }}
-                      >
-                        <Trash2 size={13} /> Revoke
-                      </button>
-                    )}
-                  </div>
+      {/* Existing keys */}
+      <div className="p-5 rounded-2xl bg-white border border-gray-200 shadow-sm mb-5">
+        <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2"><Shield size={15} className="text-[#D22B2B]"/> Active Keys</h3>
+        {keys.length === 0 ? (
+          <div className="text-xs text-gray-500 py-4 text-center">No API keys generated yet</div>
+        ) : (
+          <div className="space-y-2">
+            {keys.map(k => (
+              <div key={k.id} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100">
+                <div>
+                  <div className="text-sm font-semibold text-gray-900">{k.name}</div>
+                  <div className="text-[10px] text-gray-500 font-mono mt-0.5">{k.prefix}••••••••  ·  {k.role}  ·  Created {new Date(k.createdAt).toLocaleDateString()}</div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Integration cURL Guide */}
-        <div className="glass-card" style={{ padding: '28px' }}>
-          <h3 style={{ fontSize: '16px', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Terminal size={18} color="#FBBF24" /> Authentication Reference
-          </h3>
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '0 0 12px' }}>
-            Include your API key in the <code>X-API-Key</code> request header:
-          </p>
-          <pre style={{ padding: '14px 18px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: '#38BDF8', borderRadius: '10px', fontSize: '12px', overflowX: 'auto', fontFamily: 'monospace' }}>
-{`curl -X POST http://localhost:8080/api/v1/orders \\
-  -H "X-API-Key: stride_live_YOUR_KEY_HERE" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "customerId": "8f3b2075-81fa-4f91-9e23-74a6bfb3017a",
-    "lines": [{"productId": "6b9e73b2-e192-4f81-a67b-12d7bf394e11", "quantity": 5}]
-  }'`}
-          </pre>
-        </div>
-
+                <Button variant="danger" size="sm" onClick={() => handleRevoke(k.id)}>
+                  <Trash2 size={12}/> Revoke
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
+      {/* API Reference */}
+      <div className="p-5 rounded-2xl bg-white border border-gray-200 shadow-sm">
+        <h3 className="text-sm font-bold text-gray-900 mb-3">API Endpoint Reference</h3>
+        <div className="space-y-1.5">
+          {apiEndpoints.map((ep, i) => (
+            <div key={i} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 transition-colors">
+              <span className={cn('px-2 py-0.5 rounded text-[9px] font-bold font-mono',
+                ep.method === 'GET' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700')}>
+                {ep.method}
+              </span>
+              <code className="text-xs font-mono text-gray-800 flex-1">{ep.path}</code>
+              <span className="text-[10px] text-gray-500 hidden sm:block">{ep.desc}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </AppLayout>
   );
 }

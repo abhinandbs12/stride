@@ -1,28 +1,30 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Activity, Lock, Mail, ArrowRight, AlertCircle, Sparkles, ShieldCheck } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Mail, Lock, ArrowRight, Eye, EyeOff, Package, Truck, BarChart3 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 export default function Login({ setAuth }) {
+  const navigate = useNavigate();
   const [email, setEmail] = useState('admin@stride.com');
   const [password, setPassword] = useState('password123');
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const navigate = useNavigate();
+  const [showPw, setShowPw] = useState(false);
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    setError('');
     setLoading(true);
-    setError(null);
     try {
       const res = await fetch('/api/v1/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email, password }),
       });
-      if (res.status === 401) {
-        throw new Error('Invalid credentials. Please verify email and password.');
-      } else if (!res.ok) {
-        throw new Error(`Connection error (${res.status}). Ensure backend is active.`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || 'Invalid credentials');
       }
       const data = await res.json();
       setAuth(data.accessToken);
@@ -34,156 +36,104 @@ export default function Login({ setAuth }) {
     }
   };
 
-  const handleAutofill = () => {
-    setEmail('admin@stride.com');
-    setPassword('password123');
-  };
-
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '24px',
-      position: 'relative'
-    }}>
-      <div className="app-ambient-glow" />
+    <div className="min-h-screen bg-[#F3F4F6] flex items-center justify-center p-6">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="w-full max-w-[960px] grid grid-cols-1 lg:grid-cols-2 bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100"
+      >
 
-      <div className="glass-card animate-fade-in" style={{
-        maxWidth: '460px',
-        width: '100%',
-        padding: '44px 38px',
-        background: 'rgba(14, 21, 38, 0.85)',
-        border: '1px solid rgba(255, 255, 255, 0.1)',
-        boxShadow: '0 20px 60px -15px rgba(0, 0, 0, 0.8), 0 0 40px -10px rgba(99, 102, 241, 0.25)'
-      }}>
-        
-        {/* Brand Icon & Heading */}
-        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <div style={{
-            width: '56px',
-            height: '56px',
-            background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
-            borderRadius: '16px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto 16px auto',
-            boxShadow: '0 0 30px rgba(99, 102, 241, 0.5)'
-          }}>
-            <Activity size={30} color="white" />
+        {/* Left Panel — Branding */}
+        <div className="relative bg-[#D22B2B] p-10 lg:p-14 flex flex-col justify-between text-white overflow-hidden min-h-[400px]">
+          {/* Decorative circles */}
+          <div className="absolute -top-20 -right-20 w-64 h-64 rounded-full bg-white/10" />
+          <div className="absolute -bottom-16 -left-16 w-48 h-48 rounded-full bg-white/10" />
+          <div className="absolute top-1/2 right-10 w-24 h-24 rounded-full bg-white/5" />
+
+          <div className="relative z-10">
+            <div className="flex items-center gap-3 mb-8">
+              <div className="w-11 h-11 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center">
+                <svg viewBox="0 0 28 28" fill="none" className="w-6 h-6">
+                  <path d="M14 3L4 9v10l10 6 10-6V9L14 3z" stroke="white" strokeWidth="2.5" fill="white" fillOpacity=".15"/>
+                  <path d="M14 25V14M24 9l-10 5L4 9" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
+                </svg>
+              </div>
+              <span className="text-2xl font-extrabold tracking-tight">STRIDE</span>
+            </div>
+
+            <h2 className="text-3xl lg:text-4xl font-extrabold leading-tight mb-4">
+              Multi-Node<br/>Intelligent Freight<br/>Routing
+            </h2>
+            <p className="text-white/80 text-sm leading-relaxed max-w-xs">
+              Enterprise supply chain platform with autonomous nearest-warehouse allocation, pessimistic concurrency control, and real-time logistics tracking.
+            </p>
           </div>
-          <h1 style={{ fontSize: '28px', color: '#F8FAFC', marginBottom: '6px', letterSpacing: '-0.03em' }}>
-            STRIDE Console
-          </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '14px', fontWeight: 500 }}>
-            Autonomous Multi-Node Fulfillment Platform
+
+          <div className="relative z-10 flex items-center gap-6 text-white/70 text-xs font-medium mt-8">
+            <span className="flex items-center gap-1.5"><Package size={14}/> Multi-Node</span>
+            <span className="flex items-center gap-1.5"><Truck size={14}/> Real-Time</span>
+            <span className="flex items-center gap-1.5"><BarChart3 size={14}/> Analytics</span>
+          </div>
+        </div>
+
+        {/* Right Panel — Login Form */}
+        <div className="p-10 lg:p-14 flex flex-col justify-center">
+          <div className="mb-8">
+            <h3 className="text-2xl font-extrabold text-gray-900 mb-1">Welcome back</h3>
+            <p className="text-sm text-gray-500">Sign in to your logistics command center</p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-5">
+            {/* Email */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Email</label>
+              <div className="relative">
+                <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"/>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="admin@stride.com"
+                  className="w-full h-12 pl-11 pr-4 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-900 font-medium placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#D22B2B]/20 focus:border-[#D22B2B] transition-all"
+                />
+              </div>
+            </div>
+
+            {/* Password */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Password</label>
+              <div className="relative">
+                <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"/>
+                <input
+                  type={showPw ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full h-12 pl-11 pr-11 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-900 font-medium placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#D22B2B]/20 focus:border-[#D22B2B] transition-all"
+                />
+                <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 cursor-pointer">
+                  {showPw ? <EyeOff size={16}/> : <Eye size={16}/>}
+                </button>
+              </div>
+            </div>
+
+            {error && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-semibold text-red-700">{error}</div>
+            )}
+
+            <Button variant="primary" size="lg" className="w-full" disabled={loading}>
+              {loading ? 'Authenticating...' : 'Sign In'}
+              {!loading && <ArrowRight size={16}/>}
+            </Button>
+          </form>
+
+          <p className="text-xs text-gray-400 text-center mt-8">
+            Default credentials: admin@stride.com / password123
           </p>
         </div>
-
-        {/* Error Notification */}
-        {error && (
-          <div style={{
-            background: 'rgba(244, 63, 94, 0.15)',
-            border: '1px solid rgba(244, 63, 94, 0.3)',
-            color: '#FB7185',
-            padding: '12px 16px',
-            borderRadius: '12px',
-            fontSize: '13px',
-            fontWeight: 600,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            marginBottom: '20px'
-          }}>
-            <AlertCircle size={16} />
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-          <div>
-            <label style={{
-              display: 'block',
-              fontSize: '12px',
-              fontWeight: 700,
-              color: 'var(--text-muted)',
-              marginBottom: '8px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em'
-            }}>
-              Email Address
-            </label>
-            <div style={{ position: 'relative' }}>
-              <Mail size={16} style={{ position: 'absolute', left: '14px', top: '14px', color: 'var(--text-dim)' }} />
-              <input 
-                type="email" 
-                className="form-input" 
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                style={{ paddingLeft: '40px', height: '46px' }}
-                placeholder="name@company.com"
-                required
-              />
-            </div>
-          </div>
-
-          <div>
-            <label style={{
-              display: 'block',
-              fontSize: '12px',
-              fontWeight: 700,
-              color: 'var(--text-muted)',
-              marginBottom: '8px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em'
-            }}>
-              Password
-            </label>
-            <div style={{ position: 'relative' }}>
-              <Lock size={16} style={{ position: 'absolute', left: '14px', top: '14px', color: 'var(--text-dim)' }} />
-              <input 
-                type="password" 
-                className="form-input"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                style={{ paddingLeft: '40px', height: '46px' }}
-                placeholder="••••••••"
-                required
-              />
-            </div>
-          </div>
-
-          <button 
-            type="submit" 
-            className="btn-primary" 
-            style={{ height: '48px', marginTop: '8px', fontSize: '15px' }} 
-            disabled={loading}
-          >
-            {loading ? 'Verifying Security Context...' : (
-              <>
-                Sign In to Console <ArrowRight size={16} />
-              </>
-            )}
-          </button>
-        </form>
-
-        {/* Demo Credentials Quick Fill Pill */}
-        <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: '12px', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <ShieldCheck size={14} color="#10B981" /> Demo Access Active
-          </div>
-          <button 
-            type="button" 
-            onClick={handleAutofill}
-            style={{ background: 'none', border: 'none', color: '#818CF8', fontSize: '12px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-          >
-            <Sparkles size={13} /> Fill Demo Admin
-          </button>
-        </div>
-
-      </div>
+      </motion.div>
     </div>
   );
 }

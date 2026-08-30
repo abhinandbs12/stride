@@ -1,121 +1,124 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { 
-  Activity, LayoutDashboard, BarChart3, Building2, Key, Truck, 
-  LogOut, Shield, Zap, Sparkles, ExternalLink 
-} from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Truck, Train, Ship, Plane, LogOut, ArrowLeft, Search, LayoutGrid } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
-export default function AppLayout({ children, token, setAuth }) {
+const NAV_ITEMS = [
+  { label: 'Home', path: '/dashboard' },
+  { label: 'Shipments', path: '/station' },
+  { label: 'Orders', path: '/analytics' },
+  { label: 'Inventory', path: '/developer' },
+  { label: 'Suppliers', path: '/track' },
+];
+
+const TRANSPORT_MODES = [
+  { id: 'truck', icon: Truck, label: 'Road' },
+  { id: 'train', icon: Train, label: 'Rail' },
+  { id: 'ship', icon: Ship, label: 'Sea' },
+  { id: 'plane', icon: Plane, label: 'Air' },
+];
+
+export default function AppLayout({ children, setAuth }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const [transport, setTransport] = useState('train');
 
   const handleLogout = () => {
-    setAuth(null);
+    if (setAuth) setAuth(null);
+    localStorage.removeItem('stride_token');
     navigate('/login');
   };
 
-  const navItems = [
-    { label: 'Digital Twin Map', path: '/dashboard', icon: LayoutDashboard },
-    { label: 'Warehouse Station', path: '/station', icon: Building2 },
-    { label: 'ESG & Analytics', path: '/analytics', icon: BarChart3 },
-    { label: 'Developer Portal', path: '/developer', icon: Key },
-    { label: 'Customer Tracker', path: '/track', icon: Truck },
-  ];
+  const isActive = (path) => {
+    if (path === '/dashboard') return location.pathname === '/dashboard';
+    return location.pathname.startsWith(path);
+  };
 
   return (
-    <div className="app-layout">
-      <div className="app-ambient-glow" />
+    <div className="min-h-screen bg-[#F3F4F6] flex flex-col">
 
-      {/* Sidebar Navigation */}
-      <aside className="app-sidebar">
-        
-        {/* Brand Header */}
-        <div style={{ padding: '24px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ 
-            width: '38px', height: '38px', borderRadius: '10px', 
-            background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', 
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 0 20px rgba(99, 102, 241, 0.4)'
-          }}>
-            <Activity size={22} color="white" />
+      {/* ── Header ────────────────────────────────────────── */}
+      <header className="flex items-center justify-between px-8 py-5">
+
+        {/* Left: Logo + Greeting */}
+        <Link to="/dashboard" className="flex items-center gap-3 group">
+          <div className="w-11 h-11 rounded-xl bg-[#D22B2B] flex items-center justify-center shadow-md shadow-red-400/20 group-hover:scale-105 transition-transform shrink-0">
+            <svg viewBox="0 0 28 28" fill="none" className="w-6 h-6">
+              <path d="M14 3L4 9v10l10 6 10-6V9L14 3z" stroke="white" strokeWidth="2.5" fill="white" fillOpacity=".15"/>
+              <path d="M14 25V14M24 9l-10 5L4 9" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
+            </svg>
           </div>
           <div>
-            <div style={{ fontSize: '18px', fontWeight: 800, letterSpacing: '-0.02em', color: '#F8FAFC', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              STRIDE <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: 'rgba(99, 102, 241, 0.2)', color: '#818CF8', fontWeight: 800 }}>PRO</span>
-            </div>
-            <div style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: 600 }}>Autonomous Fulfillment</div>
+            <h1 className="text-xl font-extrabold text-gray-900 leading-tight tracking-tight">Hi, Taufiq!</h1>
+            <p className="text-xs text-gray-500 font-medium">Optimize your shipments in real time</p>
           </div>
-        </div>
+        </Link>
 
-        {/* Live System Status Pill */}
-        <div style={{ padding: '14px 16px', margin: '14px 14px 6px', background: 'rgba(16, 185, 129, 0.08)', borderRadius: '10px', border: '1px solid rgba(16, 185, 129, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div className="pulse-dot" style={{ background: '#10B981' }} />
-            <span style={{ fontSize: '12px', fontWeight: 700, color: '#34D399' }}>Cluster Active</span>
-          </div>
-          <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontFamily: 'monospace' }}>8080-UP</span>
-        </div>
-
-        {/* Navigation Links */}
-        <nav style={{ padding: '10px 0', flex: 1 }}>
-          <div style={{ padding: '0 20px 8px', fontSize: '11px', fontWeight: 800, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            Platform Hubs
-          </div>
-          {navItems.map(item => {
-            const Icon = item.icon;
-            const isActive = location.pathname.startsWith(item.path);
-            return (
-              <Link 
-                key={item.path}
-                to={item.path} 
-                className={`nav-item ${isActive ? 'active' : ''}`}
-              >
-                <Icon size={18} />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
+        {/* Center: Navigation pills */}
+        <nav className="hidden md:flex items-center gap-1 p-1 rounded-full bg-gray-200/70">
+          {NAV_ITEMS.map((item) => (
+            <Link
+              key={item.label}
+              to={item.path}
+              className={cn(
+                'px-4 py-1.5 rounded-full text-xs font-semibold transition-all',
+                isActive(item.path)
+                  ? 'bg-[#D22B2B] text-white shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-white/60'
+              )}
+            >
+              {item.label}
+            </Link>
+          ))}
         </nav>
 
-        {/* Footer / User Profile */}
-        <div style={{ padding: '16px', borderTop: '1px solid var(--border-subtle)', background: 'rgba(0,0,0,0.2)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'linear-gradient(135deg, #3B82F6, #1D4ED8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '13px', color: 'white' }}>
-                AD
-              </div>
-              <div>
-                <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-main)' }}>Admin User</div>
-                <div style={{ fontSize: '11px', color: 'var(--text-dim)' }}>admin@stride.io</div>
-              </div>
-            </div>
-            <button 
-              onClick={handleLogout}
-              className="btn-secondary"
-              style={{ padding: '8px', borderRadius: '8px', color: 'var(--text-muted)' }}
-              title="Sign Out"
-            >
-              <LogOut size={16} />
-            </button>
-          </div>
-
-          <a 
-            href="/swagger-ui.html" 
-            target="_blank" 
-            rel="noreferrer" 
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '11px', color: 'var(--text-dim)', textDecoration: 'none', fontWeight: 600, padding: '6px', borderRadius: '6px', background: 'var(--bg-surface)' }}
-          >
-            OpenAPI Specs <ExternalLink size={12} />
-          </a>
+        {/* Right: Utility icons + avatar */}
+        <div className="flex items-center gap-2">
+          <button onClick={() => navigate('/track')} className="w-9 h-9 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-800 hover:bg-gray-50 transition-colors shadow-sm cursor-pointer">
+            <Search size={15}/>
+          </button>
+          <button onClick={() => navigate('/station')} className="w-9 h-9 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-800 hover:bg-gray-50 transition-colors shadow-sm cursor-pointer">
+            <LayoutGrid size={15}/>
+          </button>
+          <button onClick={handleLogout} className="w-9 h-9 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-500 hover:text-[#D22B2B] hover:bg-red-50 transition-colors shadow-sm cursor-pointer">
+            <LogOut size={15}/>
+          </button>
+          <div className="w-9 h-9 rounded-full bg-gray-900 text-white flex items-center justify-center text-[11px] font-bold ml-0.5">TA</div>
         </div>
+      </header>
 
-      </aside>
+      {/* ── Body ─────────────────────────────────────────── */}
+      <div className="flex-1 flex px-6 pb-8 gap-4">
 
-      {/* Main Screen Content */}
-      <main className="app-main">
-        {children}
-      </main>
+        {/* Left: Transport dock */}
+        <aside className="hidden lg:flex flex-col items-center gap-2 pt-1 shrink-0">
+          <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-800 hover:bg-gray-50 shadow-sm cursor-pointer mb-1">
+            <ArrowLeft size={17}/>
+          </button>
+          <div className="flex flex-col gap-1.5 p-1.5 rounded-2xl bg-white border border-gray-200 shadow-sm">
+            {TRANSPORT_MODES.map((m) => {
+              const Icon = m.icon;
+              const active = transport === m.id;
+              return (
+                <button key={m.id} onClick={() => setTransport(m.id)} title={m.label}
+                  className={cn('w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer',
+                    active ? 'bg-[#D22B2B] text-white shadow-md shadow-red-400/20' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'
+                  )}>
+                  <Icon size={18} strokeWidth={active ? 2.5 : 2}/>
+                </button>
+              );
+            })}
+          </div>
+        </aside>
 
+        {/* Main content */}
+        <main className="flex-1 min-w-0">
+          <motion.div key={location.pathname} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{duration:0.25}}>
+            {children}
+          </motion.div>
+        </main>
+      </div>
     </div>
   );
 }

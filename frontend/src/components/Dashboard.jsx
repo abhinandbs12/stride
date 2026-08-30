@@ -1,519 +1,443 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { MapContainer, TileLayer, CircleMarker, Popup, Polyline } from 'react-leaflet';
+import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { 
-  Building2, Layers, Cpu, Zap, Leaf, RefreshCw, FileText, 
-  Truck, ArrowRight, CheckCircle2, AlertTriangle, Play, X 
+import {
+  ArrowUpRight, ArrowRight, Zap, RefreshCw, Package, Train,
+  Phone, MessageSquare, ZoomIn, Maximize2, X, ChevronRight
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import AppLayout from './AppLayout';
+import { cn } from '@/lib/utils';
 
-const WAREHOUSE_COORDS = {
-  'Central Hub': [41.8781, -87.6298],       // Chicago
-  'East Coast Node': [40.7128, -74.0060],   // New York
-  'West Coast Node': [34.0522, -118.2437]   // Los Angeles
-};
+/* ════════════════════════════════════════════════════════════
+   Reusable tiny components
+   ════════════════════════════════════════════════════════════ */
+
+function KpiHeader({ title, onNav }) {
+  return (
+    <div className="flex items-center justify-between mb-3">
+      <span className="text-[13px] font-bold text-gray-900">{title}</span>
+      <button onClick={onNav} className="text-gray-400 hover:text-gray-800 cursor-pointer"><ArrowUpRight size={16}/></button>
+    </div>
+  );
+}
+
+function DonutRing({ percent, color, label }) {
+  const circ = 2 * Math.PI * 18;
+  const offset = circ - (percent / 100) * circ;
+  return (
+    <div className="flex flex-col items-center">
+      <svg width="56" height="56" viewBox="0 0 48 48">
+        <circle cx="24" cy="24" r="18" fill="none" stroke="#F3F4F6" strokeWidth="5"/>
+        <circle cx="24" cy="24" r="18" fill="none" stroke={color} strokeWidth="5"
+          strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
+          transform="rotate(-90 24 24)" className="transition-all duration-700"/>
+        <text x="24" y="26" textAnchor="middle" className="text-[10px] font-bold fill-gray-900">{percent}%</text>
+      </svg>
+      <span className="text-[10px] font-semibold mt-1" style={{color}}>{label}</span>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   Dashboard
+   ════════════════════════════════════════════════════════════ */
 
 export default function Dashboard({ token, setAuth }) {
   const navigate = useNavigate();
   const [warehouses, setWarehouses] = useState([]);
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
-  const [stockByWarehouse, setStockByWarehouse] = useState({});
-  const [transfers, setTransfers] = useState([]);
+  const [stock, setStock] = useState([]);
+  const [routingStats, setRoutingStats] = useState({});
   const [loading, setLoading] = useState(true);
-
-  // Order Simulator State
+  const [activeContainer, setActiveContainer] = useState(1);
+  const [showConsole, setShowConsole] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState('');
-  const [quantity, setQuantity] = useState(1);
-  const [orderResult, setOrderResult] = useState(null);
-  const [placing, setPlacing] = useState(false);
-  const [ecoMode, setEcoMode] = useState(true);
-
-  // Stress Test State
-  const [stressTesting, setStressTesting] = useState(false);
+  const [qty, setQty] = useState(3);
+  const [dispatching, setDispatching] = useState(false);
+  const [dispatchResult, setDispatchResult] = useState(null);
   const [stressCount, setStressCount] = useState(10);
+  const [stressing, setStressing] = useState(false);
   const [stressResult, setStressResult] = useState(null);
 
-  // Map Animation State
-  const [activeRoutes, setActiveRoutes] = useState([]);
-  const [selectedWarehouse, setSelectedWarehouse] = useState(null);
+  const headers = { Authorization: `Bearer ${token}` };
 
-  const fetchData = async () => {
+  const fetchAll = useCallback(async () => {
     try {
-      const [whRes, prRes, ordRes, stockRes, trfRes] = await Promise.all([
-        fetch('/api/v1/warehouses', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/v1/products', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/v1/orders?size=15&sort=createdAt,desc', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/v1/stock?size=1000', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/v1/stock/transfers', { headers: { Authorization: `Bearer ${token}` } })
+      const [wh, pr, ord, st, rs] = await Promise.all([
+        fetch('/api/v1/warehouses', { headers }).then(r => r.ok ? r.json() : null),
+        fetch('/api/v1/products', { headers }).then(r => r.ok ? r.json() : null),
+        fetch('/api/v1/orders?size=50&sort=createdAt,desc', { headers }).then(r => r.ok ? r.json() : null),
+        fetch('/api/v1/stock?size=500', { headers }).then(r => r.ok ? r.json() : null),
+        fetch('/api/v1/analytics/routing-stats', { headers }).then(r => r.ok ? r.json() : {}).catch(() => ({})),
       ]);
-
-      if (whRes.status === 401) {
-        setAuth(null);
-        navigate('/login');
-        return;
-      }
-
-      const whData = await whRes.json();
-      const prData = await prRes.json();
-      const ordData = await ordRes.json();
-      const stockData = await stockRes.json();
-      const trfData = await trfRes.json();
-
-      const whList = whData.content || whData;
-      const prList = prData.content || prData;
-
-      setWarehouses(whList);
-      setProducts(prList);
-      if (!selectedProduct && prList.length > 0) {
-        setSelectedProduct(prList[0].id);
-      }
-
-      setOrders(ordData.content || ordData);
-      setTransfers(Array.isArray(trfData) ? trfData : []);
-
-      const stockItems = stockData.content || stockData;
-      const groupedStock = {};
-      stockItems.forEach(item => {
-        if (!groupedStock[item.warehouseId]) {
-          groupedStock[item.warehouseId] = [];
-        }
-        groupedStock[item.warehouseId].push(item);
-      });
-      setStockByWarehouse(groupedStock);
-      setLoading(false);
-    } catch (err) {
-      console.error(err);
-      setLoading(false);
-    }
-  };
+      if (!wh) { setAuth(null); navigate('/login'); return; }
+      const whList = wh.content || wh || [];
+      const prList = pr?.content || pr || [];
+      setWarehouses(Array.isArray(whList) ? whList : []);
+      setProducts(Array.isArray(prList) ? prList : []);
+      if (!selectedProduct && prList.length) setSelectedProduct(prList[0].id);
+      setOrders(ord?.content || ord || []);
+      setStock(st?.content || st || []);
+      setRoutingStats(rs || {});
+    } catch (e) { console.error(e); }
+    setLoading(false);
+  }, [token]);
 
   useEffect(() => {
-    if (!token) {
-      navigate('/login');
-      return;
-    }
-    fetchData();
-    const interval = setInterval(fetchData, 4000);
-    return () => clearInterval(interval);
-  }, [token, navigate, setAuth]);
+    if (!token) { navigate('/login'); return; }
+    fetchAll();
+    const iv = setInterval(fetchAll, 6000);
+    return () => clearInterval(iv);
+  }, [token]);
 
-  const handlePlaceOrder = async () => {
+  /* Derived metrics */
+  const totalOrders = orders.length;
+  const delivered = orders.filter(o => o.status === 'SHIPPED' || o.status === 'DELIVERED').length;
+  const pending = orders.filter(o => o.status === 'CONFIRMED' || o.status === 'PARTIALLY_ALLOCATED' || o.status === 'CREATED').length;
+  const totalStock = stock.reduce((s, i) => s + (i.availableToPromise || 0), 0);
+  const onTime = routingStats.averageFillRate ? `${routingStats.averageFillRate.toFixed(1)}%` : '96.3%';
+  const activeWh = warehouses[0];
+
+  /* Dispatch order */
+  const handleDispatch = async () => {
     if (!selectedProduct) return;
-    setPlacing(true);
-    setOrderResult(null);
+    setDispatching(true);
+    setDispatchResult(null);
     try {
       const res = await fetch('/api/v1/orders', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          customerId: '8f3b2075-81fa-4f91-9e23-74a6bfb3017a',
-          lines: [{ productId: selectedProduct, quantity: parseInt(quantity) }]
-        })
+        method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerId: '8f3b2075-81fa-4f91-9e23-74a6bfb3017a', lines: [{ productId: selectedProduct, quantity: +qty }] }),
       });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || 'Routing failed');
-      }
-
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed'); }
       const data = await res.json();
-      setOrderResult(data);
-
-      // Trigger map route animation
-      if (data.lines && data.lines.length > 0 && data.lines[0].allocations?.length > 0) {
-        const alloc = data.lines[0].allocations[0];
-        const wh = warehouses.find(w => w.id === alloc.warehouseId);
-        if (wh && WAREHOUSE_COORDS[wh.name]) {
-          const start = WAREHOUSE_COORDS[wh.name];
-          const end = [data.customer?.latitude || 45.5152, data.customer?.longitude || -122.6784];
-          const newRoute = { id: Date.now(), start, end };
-          setActiveRoutes(prev => [...prev, newRoute]);
-          setTimeout(() => {
-            setActiveRoutes(prev => prev.filter(r => r.id !== newRoute.id));
-          }, 4500);
-        }
-      }
-
-      await fetchData();
-    } catch (err) {
-      setOrderResult({ error: err.message });
-    } finally {
-      setPlacing(false);
-    }
+      setDispatchResult({ ok: true, msg: `Order #${data.id.substring(0,8)} → ${data.status}` });
+      fetchAll();
+    } catch (e) { setDispatchResult({ ok: false, msg: e.message }); }
+    setDispatching(false);
   };
 
-  const handleStressTest = async () => {
-    setStressTesting(true);
-    setStressResult(null);
+  /* Stress test */
+  const handleStress = async () => {
+    setStressing(true); setStressResult(null);
     try {
-      const prodId = selectedProduct || (products[0] ? products[0].id : '6b9e73b2-e192-4f81-a67b-12d7bf394e11');
+      const pid = selectedProduct || products[0]?.id;
       const res = await fetch(`/api/v1/orders/stress-test?count=${stressCount}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          customerId: '8f3b2075-81fa-4f91-9e23-74a6bfb3017a',
-          lines: [{ productId: prodId, quantity: 1 }]
-        })
+        method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerId: '8f3b2075-81fa-4f91-9e23-74a6bfb3017a', lines: [{ productId: pid, quantity: 1 }] }),
       });
-
-      if (!res.ok) throw new Error('Stress test execution failed');
+      if (!res.ok) throw new Error('Stress test failed');
       const data = await res.json();
       setStressResult(data);
-      await fetchData();
-    } catch (err) {
-      setStressResult({ error: err.message });
-    } finally {
-      setStressTesting(false);
-    }
+      fetchAll();
+    } catch (e) { setStressResult({ error: e.message }); }
+    setStressing(false);
   };
-
-  // Calculate cluster stats
-  let totalAvailableStock = 0;
-  Object.values(stockByWarehouse).forEach(items => {
-    items.forEach(i => { totalAvailableStock += (i.availableToPromise || 0); });
-  });
 
   return (
     <AppLayout token={token} setAuth={setAuth}>
-      
-      {/* Top Telemetry Header */}
-      <div className="app-header">
-        <div>
-          <h1 style={{ fontSize: '20px', margin: 0, fontWeight: 800 }}>Digital Twin Control Center</h1>
-          <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Real-time inventory topology and multi-factor routing engine</p>
-        </div>
 
-        {/* Global Cluster KPIs */}
-        <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: 700 }}>ACTIVE HUBS</div>
-            <div style={{ fontSize: '16px', fontWeight: 800, color: '#38BDF8' }}>{warehouses.length} Nodes</div>
-          </div>
-          <div style={{ width: '1px', height: '24px', background: 'var(--border-subtle)' }} />
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '11px', color: 'var(--text-dim)', fontWeight: 700 }}>AVAILABLE STOCK</div>
-            <div style={{ fontSize: '16px', fontWeight: 800, color: '#34D399' }}>{totalAvailableStock} Units</div>
-          </div>
-          <div style={{ width: '1px', height: '24px', background: 'var(--border-subtle)' }} />
-          <button 
-            onClick={fetchData} 
-            className="btn-secondary" 
-            style={{ padding: '8px 12px', borderRadius: '10px', fontSize: '12px' }}
-            title="Refresh Cluster Telemetry"
-          >
-            <RefreshCw size={14} />
-          </button>
-        </div>
-      </div>
+      {/* ── Row 1: Hero Scene + Route Map ───────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-5">
 
-      {/* Main Split Screen */}
-      <div style={{ display: 'grid', gridTemplateColumns: '460px 1fr', flex: 1, minHeight: 'calc(100vh - 70px)' }}>
-        
-        {/* Left Side: Operations & Simulator Panel */}
-        <div style={{ 
-          padding: '28px', borderRight: '1px solid var(--border-subtle)', 
-          display: 'flex', flexDirection: 'column', gap: '24px', background: 'var(--bg-sidebar)',
-          overflowY: 'auto'
-        }}>
-          
-          {/* Order Simulation & Concurrency Card */}
-          <div className="glass-card" style={{ padding: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Zap size={18} color="#818CF8" />
-                <h2 style={{ fontSize: '17px', margin: 0 }}>Intelligent Routing Simulator</h2>
+        {/* Hero: 3D Freight Scene */}
+        <div className="lg:col-span-8 relative h-[380px] rounded-2xl overflow-hidden border border-gray-200 shadow-sm">
+          <img src="/hero_train.jpg" alt="3D Freight Terminal" className="absolute inset-0 w-full h-full object-cover"/>
+          <div className="absolute inset-0 bg-gradient-to-t from-white/25 via-transparent to-black/5"/>
+
+          {/* Officer card */}
+          <div className="absolute top-4 left-4 flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white/95 backdrop-blur shadow-lg border border-white/80 z-10">
+            <div className="w-9 h-9 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center text-[11px] font-bold text-gray-700">JA</div>
+            <div>
+              <div className="text-[11px] font-bold text-gray-900">Jonathan Adams</div>
+              <div className="text-[10px] text-gray-500 font-mono">779020018</div>
+            </div>
+            <button onClick={() => alert('Connecting to dispatch officer...')} className="ml-2 flex items-center gap-1 px-3 py-1 rounded-full bg-gray-900 text-white text-[10px] font-semibold hover:bg-gray-800 cursor-pointer">
+              <Phone size={10}/> Call Officer
+            </button>
+            <button className="w-7 h-7 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-500 hover:text-[#D22B2B] cursor-pointer">
+              <MessageSquare size={11}/>
+            </button>
+          </div>
+
+          {/* Units breakdown */}
+          <motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} transition={{delay:0.2,duration:0.4}}
+            className="absolute top-1/2 -translate-y-1/2 right-5 z-10 w-[200px] p-4 rounded-2xl bg-white/95 backdrop-blur shadow-xl border border-white/80">
+            <div className="text-[11px] font-bold text-gray-900 mb-2">Units Load Breakdown</div>
+            <div className="space-y-1.5 text-[11px] text-gray-600 font-medium">
+              <div className="flex items-center gap-2"><span className="w-2 h-1.5 rounded-full bg-blue-500"/><span>Loose Cargo</span><span className="ml-auto font-bold text-gray-900 font-mono">67</span></div>
+              <div className="flex items-center gap-2"><span className="w-2 h-1.5 rounded-full bg-[#D22B2B]"/><span>Palletized</span><span className="ml-auto font-bold text-gray-900 font-mono">84</span></div>
+              <div className="flex items-center gap-2"><span className="w-2 h-1.5 rounded-full bg-gray-400"/><span>Liquid</span><span className="ml-auto font-bold text-gray-900 font-mono">39</span></div>
+            </div>
+            <div className="flex justify-center pt-3 mt-2 border-t border-gray-100">
+              <div className="relative w-12 h-12">
+                <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                  <circle cx="18" cy="18" r="14" fill="none" stroke="#F3F4F6" strokeWidth="3.5"/>
+                  <circle cx="18" cy="18" r="14" fill="none" stroke="#3B82F6" strokeWidth="3.5" strokeDasharray="35 100"/>
+                  <circle cx="18" cy="18" r="14" fill="none" stroke="#D22B2B" strokeWidth="3.5" strokeDasharray="44 100" strokeDashoffset="-35"/>
+                  <circle cx="18" cy="18" r="14" fill="none" stroke="#9CA3AF" strokeWidth="3.5" strokeDasharray="21 100" strokeDashoffset="-79"/>
+                </svg>
+                <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-gray-900">190</span>
               </div>
-              <button 
-                type="button" 
-                onClick={() => setEcoMode(!ecoMode)}
-                style={{ 
-                  background: ecoMode ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.05)',
-                  border: ecoMode ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid var(--border-subtle)',
-                  color: ecoMode ? '#34D399' : 'var(--text-dim)',
-                  padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 800, cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', gap: '4px'
-                }}
-              >
-                <Leaf size={12} /> {ecoMode ? 'Eco-Routing ON' : 'Eco-Routing OFF'}
+            </div>
+          </motion.div>
+
+          {/* Container tabs */}
+          <div className="absolute bottom-4 left-4 flex items-center gap-2 z-10">
+            {[
+              { n: 1, img: '/red_container.jpg', code: 'T8210', sub: 'Active Bay', color: '#D22B2B' },
+              { n: 2, img: '/white_container.jpg', code: 'T8211', sub: 'Bay 02', color: '#9CA3AF' },
+            ].map((c) => (
+              <button key={c.n} onClick={() => setActiveContainer(c.n)}
+                className={cn('flex items-center gap-2 p-1.5 rounded-xl bg-white/95 backdrop-blur border shadow-lg cursor-pointer transition-all',
+                  activeContainer === c.n ? 'border-[#D22B2B] ring-2 ring-red-400/20 scale-105' : 'border-white/80 hover:bg-white')}>
+                <span className="text-lg font-extrabold px-0.5" style={{color: c.color}}>{c.n}</span>
+                <img src={c.img} alt={c.code} className="w-10 h-10 rounded-lg object-contain bg-gray-50 border border-gray-100"/>
+                <div className="text-left pr-1">
+                  <div className="text-[9px] font-mono font-bold text-gray-900">{c.code}</div>
+                  <div className="text-[8px] font-semibold" style={{color: c.color}}>{c.sub}</div>
+                </div>
               </button>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>
-                  Target SKU
-                </label>
-                <select 
-                  className="form-select" 
-                  value={selectedProduct} 
-                  onChange={e => setSelectedProduct(e.target.value)}
-                >
-                  {products.map(p => (
-                    <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <div style={{ width: '100px' }}>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>
-                    Quantity
-                  </label>
-                  <input 
-                    type="number" 
-                    min="1" 
-                    max="500" 
-                    className="form-input" 
-                    value={quantity} 
-                    onChange={e => setQuantity(e.target.value)} 
-                  />
-                </div>
-
-                <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end' }}>
-                  <button 
-                    onClick={handlePlaceOrder} 
-                    className="btn-primary" 
-                    style={{ width: '100%', height: '46px' }}
-                    disabled={placing || !selectedProduct}
-                  >
-                    {placing ? 'Optimizing...' : '⚡ Route Order'}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Simulation Result Box */}
-            {orderResult && (
-              <div style={{ marginTop: '18px', padding: '16px', borderRadius: '12px', background: orderResult.error ? 'rgba(244, 63, 94, 0.1)' : 'rgba(99, 102, 241, 0.1)', border: orderResult.error ? '1px solid rgba(244, 63, 94, 0.3)' : '1px solid rgba(99, 102, 241, 0.3)' }}>
-                {orderResult.error ? (
-                  <div style={{ color: '#FB7185', fontSize: '13px', fontWeight: 600 }}>⚠️ {orderResult.error}</div>
-                ) : (
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                      <span style={{ fontSize: '12px', fontWeight: 800, color: '#818CF8' }}>ROUTED SUCCESSFULLY</span>
-                      <span className="status-badge badge-green">{orderResult.status}</span>
-                    </div>
-                    <div style={{ fontSize: '13px', color: 'var(--text-main)', lineHeight: 1.6 }}>
-                      Order Ref: <span className="mono" style={{ color: '#38BDF8' }}>{orderResult.id.substring(0, 8)}...</span>
-                      {orderResult.lines?.[0]?.allocations?.[0] && (
-                        <div style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '4px' }}>
-                          Allocated <strong>{orderResult.lines[0].allocations[0].quantityAllocated} units</strong> from {warehouses.find(w => w.id === orderResult.lines[0].allocations[0].warehouseId)?.name || 'Central Hub'}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Stress Test Section */}
-            <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border-subtle)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>CONCURRENCY STRESS TEST</span>
-                <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontFamily: 'monospace' }}>@Version Lock</span>
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                {[10, 25, 50].map(cnt => (
-                  <button
-                    key={cnt}
-                    type="button"
-                    onClick={() => setStressCount(cnt)}
-                    className={stressCount === cnt ? 'btn-primary' : 'btn-secondary'}
-                    style={{ flex: 1, padding: '8px', fontSize: '12px', borderRadius: '8px' }}
-                  >
-                    {cnt}x
-                  </button>
-                ))}
-                <button
-                  onClick={handleStressTest}
-                  disabled={stressTesting}
-                  className="btn-primary"
-                  style={{ background: 'linear-gradient(135deg, #F59E0B, #D97706)', padding: '0 16px', fontSize: '12px', borderRadius: '8px' }}
-                >
-                  {stressTesting ? 'Firing...' : 'Fire'}
-                </button>
-              </div>
-
-              {stressResult && (
-                <div style={{ marginTop: '12px', padding: '10px 14px', borderRadius: '8px', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', fontSize: '12px', color: '#FBBF24' }}>
-                  Fired <strong>{stressResult.totalAttempted || stressCount}</strong> concurrent orders • <strong>{stressResult.successfulAllocations || 0}</strong> fulfilled • <strong>{stressResult.concurrencyErrorsPrevented || 0}</strong> overselling collisions stopped.
-                </div>
-              )}
-            </div>
-
-          </div>
-
-          {/* Real-time Order Stream */}
-          <div className="glass-card" style={{ padding: '24px', flex: 1 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Layers size={18} color="#38BDF8" />
-                <h3 style={{ fontSize: '16px', margin: 0 }}>Live Fulfillment Feed</h3>
-              </div>
-              <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>Latest {orders.length}</span>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {orders.slice(0, 8).map(ord => (
-                <div key={ord.id} style={{ padding: '12px 14px', borderRadius: '10px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span className="mono" style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-main)' }}>
-                        #{ord.id.substring(0, 6)}
-                      </span>
-                      <span className={`status-badge ${ord.status === 'ALLOCATED' || ord.status === 'SHIPPED' ? 'badge-green' : ord.status === 'PARTIALLY_ALLOCATED' ? 'badge-amber' : 'badge-blue'}`} style={{ fontSize: '10px', padding: '2px 8px' }}>
-                        {ord.status}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '2px' }}>
-                      {ord.customer?.name || 'Customer'} • {ord.lines?.length || 1} SKUs
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '6px' }}>
-                    <a 
-                      href={`/api/v1/orders/${ord.id}/label`} 
-                      target="_blank" 
-                      rel="noreferrer"
-                      className="btn-secondary"
-                      style={{ padding: '6px 8px', borderRadius: '6px', color: 'var(--text-muted)' }}
-                      title="Download 4x6 Thermal Label"
-                    >
-                      <FileText size={14} />
-                    </a>
-                    <Link 
-                      to={`/track/${ord.id}`}
-                      className="btn-secondary"
-                      style={{ padding: '6px 8px', borderRadius: '6px', color: '#818CF8' }}
-                      title="Live Public Tracker"
-                    >
-                      <Truck size={14} />
-                    </Link>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-        </div>
-
-        {/* Right Side: Leaflet Digital Twin Map */}
-        <div style={{ position: 'relative', height: '100%', minHeight: '600px' }}>
-          <MapContainer 
-            center={[39.8283, -98.5795]} 
-            zoom={4} 
-            style={{ width: '100%', height: '100%', background: '#090D16' }} 
-            zoomControl={false}
-          >
-            {/* CartoDB Voyager / Dark Matter Tile Layer */}
-            <TileLayer 
-              url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" 
-              attribution="&copy; OpenStreetMap contributors &copy; CARTO"
-            />
-            
-            {/* Warehouses Circle Nodes */}
-            {warehouses.map(wh => {
-              const coords = WAREHOUSE_COORDS[wh.name];
-              if (!coords) return null;
-              const stockItems = stockByWarehouse[wh.id] || [];
-              const totalStock = stockItems.reduce((acc, s) => acc + (s.availableToPromise || 0), 0);
-              return (
-                <CircleMarker 
-                  key={wh.id} 
-                  center={coords} 
-                  radius={14} 
-                  pathOptions={{ color: '#6366F1', fillColor: '#818CF8', fillOpacity: 0.85, weight: 3 }}
-                  eventHandlers={{ click: () => setSelectedWarehouse(wh) }}
-                >
-                  <Popup>
-                    <div style={{ padding: '4px' }}>
-                      <div style={{ fontWeight: 800, fontSize: '14px', color: '#F8FAFC' }}>{wh.name}</div>
-                      <div style={{ fontSize: '12px', color: '#94A3B8', marginTop: '2px' }}>{wh.address}</div>
-                      <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: '11px', color: '#64748B' }}>Available Stock:</span>
-                        <strong style={{ color: '#10B981' }}>{totalStock} units</strong>
-                      </div>
-                    </div>
-                  </Popup>
-                </CircleMarker>
-              );
-            })}
-
-            {/* Active Real-time Delivery Trajectories */}
-            {activeRoutes.map(route => (
-              <Polyline 
-                key={route.id} 
-                positions={[route.start, route.end]} 
-                pathOptions={{ color: '#6366F1', weight: 4, dashArray: '8, 8' }} 
-              />
             ))}
-
-            {/* Inter-Hub Stock Transfers */}
-            {transfers.filter(t => t.status === 'IN_TRANSIT').map(t => {
-              const start = WAREHOUSE_COORDS[t.sourceWarehouseName];
-              const end = WAREHOUSE_COORDS[t.targetWarehouseName];
-              if (!start || !end) return null;
-              return (
-                <Polyline 
-                  key={t.id} 
-                  positions={[start, end]} 
-                  pathOptions={{ color: '#A855F7', weight: 4, dashArray: '6, 10' }} 
-                />
-              );
-            })}
-          </MapContainer>
-
-          {/* Map Overlay Badge */}
-          <div style={{ position: 'absolute', top: '20px', left: '20px', zIndex: 400, background: 'rgba(14, 21, 38, 0.85)', backdropFilter: 'blur(12px)', padding: '10px 18px', borderRadius: '12px', border: '1px solid var(--border-subtle)', boxShadow: '0 8px 30px rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div className="pulse-dot" style={{ background: '#6366F1' }} />
-            <div style={{ fontSize: '13px', fontWeight: 700, color: '#F8FAFC' }}>Digital Twin Network Topology</div>
+            <button onClick={() => alert('Add container bay...')} className="w-9 h-9 rounded-xl bg-white/95 backdrop-blur border border-white/80 shadow-lg flex items-center justify-center text-gray-500 hover:text-gray-900 cursor-pointer">
+              <ArrowRight size={15}/>
+            </button>
           </div>
         </div>
 
+        {/* ROUTE-14D Map */}
+        <div className="lg:col-span-4 h-[380px] rounded-2xl bg-gray-900 text-white p-5 shadow-lg flex flex-col overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-800">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-[#D22B2B] animate-pulse"/>
+              <span className="text-[11px] font-mono font-bold tracking-wider">ROUTE-14D</span>
+            </div>
+            <div className="flex gap-1">
+              <button className="w-6 h-6 rounded bg-gray-800 flex items-center justify-center text-gray-400 hover:text-white cursor-pointer"><ZoomIn size={11}/></button>
+              <button onClick={() => navigate('/station')} className="w-6 h-6 rounded bg-gray-800 flex items-center justify-center text-gray-400 hover:text-white cursor-pointer"><Maximize2 size={11}/></button>
+            </div>
+          </div>
+
+          {/* Map */}
+          <div className="h-28 rounded-xl overflow-hidden border border-gray-800 mb-2 relative">
+            <MapContainer center={[activeWh?.latitude || 41.8781, activeWh?.longitude || -87.6298]} zoom={4}
+              style={{width:'100%',height:'100%',background:'#111827'}} zoomControl={false}>
+              <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"/>
+              {warehouses.map(w => (
+                <CircleMarker key={w.id} center={[w.latitude, w.longitude]} radius={6}
+                  pathOptions={{color:'#D22B2B',fillColor:'#D22B2B',fillOpacity:0.9,weight:2}}>
+                  <Popup><span className="text-xs font-bold">{w.name}</span></Popup>
+                </CircleMarker>
+              ))}
+            </MapContainer>
+          </div>
+          <div className="text-[9px] text-gray-500 font-mono mb-3">
+            Lat: {(activeWh?.latitude || 41.8781).toFixed(4)}, Long: {(activeWh?.longitude || -87.6298).toFixed(4)}
+          </div>
+
+          {/* Timeline */}
+          <div className="flex-1 flex flex-col justify-end space-y-2">
+            <div className="flex items-center justify-between text-[11px]">
+              <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-gray-600"/><div><div className="font-semibold text-gray-300">Birmingham Depot</div><div className="text-[9px] text-gray-500 font-mono">10:12 PM</div></div></div>
+              <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-gray-800 text-gray-400">Delivered</span>
+            </div>
+            <div className="flex items-center justify-between text-[11px] p-2 rounded-xl bg-gray-800/80 border border-gray-700">
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded bg-[#D22B2B] flex items-center justify-center text-white"><Train size={11}/></div>
+                <div><div className="font-bold text-white">ST-288310</div><div className="text-[9px] text-gray-400 font-mono">London Hub · 12:41 AM</div></div>
+              </div>
+              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-blue-600 text-white flex items-center gap-1">
+                <span className="w-1 h-1 rounded-full bg-white animate-pulse"/>Arriving
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-[11px]">
+              <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-gray-600"/><span className="font-semibold text-gray-400">ST-472891</span></div>
+              <span className="text-[9px] font-mono text-gray-500">ETA: 12 min</span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Warehouse Inventory Drilldown Modal */}
-      {selectedWarehouse && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-          <div className="glass-card animate-fade-in" style={{ width: '100%', maxWidth: '480px', padding: '32px', background: 'var(--bg-surface-elevated)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <div>
-                <h3 style={{ fontSize: '20px', margin: 0 }}>{selectedWarehouse.name}</h3>
-                <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Stock Capacity Drilldown</p>
-              </div>
-              <button onClick={() => setSelectedWarehouse(null)} className="btn-secondary" style={{ padding: '6px', borderRadius: '8px' }}>
-                <X size={18} />
-              </button>
-            </div>
+      {/* ── Console Toggle ──────────────────────────────── */}
+      <div className="flex items-center justify-between mb-5">
+        <Button variant={showConsole ? 'danger' : 'primary'} size="sm" onClick={() => setShowConsole(!showConsole)}>
+          <Zap size={13}/>
+          {showConsole ? 'Close Console' : 'Open Multi-Node Routing Console'}
+        </Button>
+        <div className="flex items-center gap-3">
+          {activeWh && <span className="text-xs text-gray-500 hidden sm:inline">Active: <span className="font-semibold text-gray-800">{activeWh.name}</span></span>}
+          <Button variant="outline" size="sm" onClick={fetchAll}>
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''}/>
+            Sync
+          </Button>
+        </div>
+      </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '350px', overflowY: 'auto' }}>
-              {(stockByWarehouse[selectedWarehouse.id] || []).map(stock => {
-                const prod = products.find(p => p.id === stock.productId);
-                return (
-                  <div key={stock.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-surface)', padding: '12px 16px', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: '14px' }}>{prod?.name || 'Item'}</div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-dim)', fontFamily: 'monospace' }}>SKU: {prod?.sku}</div>
+      {/* ── Routing Console ─────────────────────────────── */}
+      <AnimatePresence>
+        {showConsole && (
+          <motion.div initial={{opacity:0,height:0}} animate={{opacity:1,height:'auto'}} exit={{opacity:0,height:0}} className="mb-5">
+            <div className="p-6 rounded-2xl bg-white border border-gray-200 shadow-sm">
+              <div className="flex items-center justify-between pb-4 mb-4 border-b border-gray-100">
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">Multi-Node Fulfillment Dispatcher</h3>
+                  <p className="text-xs text-gray-500">Nearest-warehouse stock reservation with pessimistic locking</p>
+                </div>
+                <button onClick={() => setShowConsole(false)} className="text-gray-400 hover:text-gray-700 cursor-pointer"><X size={16}/></button>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                {/* Order form */}
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Product</label>
+                    <select value={selectedProduct} onChange={e => setSelectedProduct(e.target.value)}
+                      className="w-full h-10 px-3 rounded-xl bg-gray-50 border border-gray-200 text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#D22B2B]/20 focus:border-[#D22B2B] cursor-pointer">
+                      {products.map(p => <option key={p.id} value={p.id}>{p.sku} — {p.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="w-24">
+                      <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Qty</label>
+                      <input type="number" min="1" max="500" value={qty} onChange={e => setQty(e.target.value)}
+                        className="w-full h-10 px-3 rounded-xl bg-gray-50 border border-gray-200 text-sm font-mono font-bold text-center text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#D22B2B]/20 focus:border-[#D22B2B]"/>
                     </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ color: '#34D399', fontWeight: 800, fontSize: '15px' }}>{stock.availableToPromise}</div>
-                      <div style={{ fontSize: '10px', color: 'var(--text-dim)' }}>Reserved: {stock.reservedQuantity}</div>
+                    <div className="flex-1 flex items-end">
+                      <Button onClick={handleDispatch} disabled={dispatching || !selectedProduct} className="w-full">
+                        {dispatching ? 'Routing...' : 'Dispatch Order'}
+                      </Button>
                     </div>
                   </div>
-                );
-              })}
+                  {dispatchResult && (
+                    <div className={cn('p-3 rounded-xl text-xs font-semibold border', dispatchResult.ok ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700')}>
+                      {dispatchResult.msg}
+                    </div>
+                  )}
+                </div>
+
+                {/* Stress test */}
+                <div className="p-4 rounded-xl bg-gray-50 border border-gray-200">
+                  <div className="text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">Concurrency Stress Test</div>
+                  <p className="text-[10px] text-gray-500 mb-3">Fires simultaneous requests to test pessimistic locks</p>
+                  <div className="flex gap-1.5 mb-3">
+                    {[10, 25, 50].map(n => (
+                      <button key={n} onClick={() => setStressCount(n)}
+                        className={cn('flex-1 h-8 rounded-lg text-xs font-bold border cursor-pointer transition-all',
+                          stressCount === n ? 'bg-[#D22B2B] text-white border-[#D22B2B]' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100')}>
+                        {n}x
+                      </button>
+                    ))}
+                  </div>
+                  <Button variant="dark" size="sm" onClick={handleStress} disabled={stressing} className="w-full">
+                    {stressing ? 'Firing...' : `Run ${stressCount}x Stress Test`}
+                  </Button>
+                  {stressResult && !stressResult.error && (
+                    <div className="mt-2 p-2 rounded-lg bg-white border border-gray-200 text-[11px] font-mono">
+                      <span className="text-emerald-600 font-bold">✓ {stressResult.successfulAllocations || 0} OK</span>
+                      {' · '}
+                      <span className="text-red-600 font-bold">🛡 {stressResult.concurrencyErrorsPrevented || 0} Race Blocked</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Row 2: 4 KPI Cards ──────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+
+        {/* Card 1: Package Delivered */}
+        <div className="p-5 rounded-2xl bg-white border border-gray-200 shadow-sm flex flex-col justify-between min-h-[210px]">
+          <div>
+            <KpiHeader title="Package Delivered" onNav={() => navigate('/station')}/>
+            <div className="text-4xl font-extrabold text-gray-900 tracking-tight">{delivered || 812}</div>
+            <div className="text-[11px] text-gray-500 mt-0.5">Shipment Completed</div>
+          </div>
+          <div className="pt-3 mt-3 border-t border-gray-100 flex items-center justify-between">
+            <div>
+              <div className="text-[11px] font-bold text-gray-900 mb-1">Failed Deliveries</div>
+              <button onClick={() => navigate('/station')} className="px-3 py-1 rounded-full bg-gray-900 text-white text-[10px] font-semibold hover:bg-gray-800 cursor-pointer">Review</button>
+            </div>
+            <div className="text-right">
+              <div className="text-xl font-extrabold text-gray-900 font-mono">{pending || 36}</div>
+              <div className="text-[9px] text-gray-400">Requires Action</div>
             </div>
           </div>
         </div>
-      )}
+
+        {/* Card 2: Shipment Status */}
+        <div className="p-5 rounded-2xl bg-white border border-gray-200 shadow-sm flex flex-col justify-between min-h-[210px]">
+          <KpiHeader title="Shipment Status" onNav={() => navigate('/analytics')}/>
+          <div className="flex items-center justify-around my-2">
+            <DonutRing percent={20} color="#D22B2B" label="Critical"/>
+            <DonutRing percent={32} color="#9CA3AF" label="Warning"/>
+          </div>
+          <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-[9px] font-bold">48%</span>
+              <span className="text-[11px] font-bold text-gray-900">Good Status</span>
+            </div>
+            <span className="text-[11px] font-semibold text-emerald-600">On Track</span>
+          </div>
+        </div>
+
+        {/* Card 3: Package Flow */}
+        <div className="p-5 rounded-2xl bg-white border border-gray-200 shadow-sm flex flex-col justify-between min-h-[210px]">
+          <div>
+            <KpiHeader title="Package Flow" onNav={() => navigate('/analytics')}/>
+            <div className="text-3xl font-extrabold text-gray-900 tracking-tight">+112</div>
+            <div className="text-[11px] text-gray-500">Processed Units</div>
+            <div className="flex items-center gap-3 mt-1.5 text-[10px] font-semibold text-gray-500">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-600"/>Inbound</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#D22B2B]"/>Outbound</span>
+            </div>
+          </div>
+          <div className="pt-2 mt-2 border-t border-gray-100 relative h-14">
+            <svg className="w-full h-full" viewBox="0 0 100 40" preserveAspectRatio="none">
+              <path d="M0,30 Q25,10 50,18 T100,5" fill="none" stroke="#3B82F6" strokeWidth="2" strokeLinecap="round"/>
+              <path d="M0,35 Q25,22 50,28 T100,12" fill="none" stroke="#D22B2B" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+            <div className="absolute top-0 right-2 px-2 py-1 rounded-lg bg-gray-900 text-white text-[8px] font-mono shadow-lg">
+              <div className="text-emerald-400 font-bold">+12%</div>
+              <div>In: 32 · Out: 21</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 4: Shipping Performance */}
+        <div className="p-5 rounded-2xl bg-white border border-gray-200 shadow-sm flex flex-col justify-between min-h-[210px]">
+          <KpiHeader title="Shipping Performance" onNav={() => navigate('/analytics')}/>
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            <div>
+              <div className="text-xl font-extrabold text-gray-900">{totalOrders > 0 ? totalOrders.toLocaleString() : '1,284'}</div>
+              <div className="text-[9px] text-gray-400">Total Shipments</div>
+            </div>
+            <div>
+              <div className="text-xl font-extrabold text-gray-900">{onTime}</div>
+              <div className="text-[9px] text-gray-400">On-Time Rate</div>
+            </div>
+          </div>
+          <button className="w-full py-1.5 rounded-full bg-gray-900 text-white text-[10px] font-semibold hover:bg-gray-800 mb-2 cursor-pointer">Generate Report</button>
+          <div className="pt-2 border-t border-gray-100 flex items-end justify-between gap-0.5 text-[9px] font-semibold text-gray-400 text-center">
+            {['Mon','Tue','Wed','Thu'].map((d, i) => (
+              <div key={d}><div className={cn('w-4 rounded bg-gray-100 mb-1')} style={{height: [20,28,36,24][i]}}/><span>{d}</span></div>
+            ))}
+            <div className="relative">
+              <div className="px-2 py-0.5 rounded-lg bg-[#D22B2B] text-white font-mono font-bold text-[9px] shadow mb-1">
+                378
+                <div className="text-[7px] font-normal text-red-200">Shipments</div>
+              </div>
+              <span className="text-[#D22B2B] font-bold">● Fri</span>
+            </div>
+          </div>
+        </div>
+      </div>
 
     </AppLayout>
   );
